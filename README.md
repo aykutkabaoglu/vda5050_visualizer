@@ -137,6 +137,13 @@ The purpose of this package is to view and visualize vda5050 messages more quick
 - Displaying the vda5050 actions that robots perform
 - Displaying data from the master controller to the robot and from the robot to the master controller
 - Display of raw json data; every object and array can be collapsed with its arrow (the collapsed sections stay collapsed while new messages arrive), and the viewer header has Expand all / Collapse all
+- Map image behind the graph (ROS map PNG + YAML)
+
+### Map Background
+
+Open **Maps** in the top bar and load a ROS map image (PNG) together with its map_server YAML file. The image is placed in the map frame with `resolution` and `origin` (`[x, y, yaw]`, the pose of the lower-left pixel), so it lines up with `agvPosition` and the order node positions.
+
+Each map can carry a VDA5050 `mapId`. In **Auto** mode the visualizer shows the maps whose `mapId` a robot reports in `agvPosition.mapId`. If no map matches, it shows the maps without a `mapId`, otherwise the first loaded map. A specific map can also be selected. **View → Show Map** toggles the map, and the dialog sets its opacity. Loaded maps are saved in the browser's localStorage.
 
 ### Factsheet Actions
 
