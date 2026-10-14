@@ -151,6 +151,19 @@ The order and instant action editors take their action types from the AGV factsh
 
 **Load Factsheet** subscribes to the factsheet topic again, so the broker sends the retained factsheet (VDA5050 2.1.0, 6.15). If none arrives within 2 s, it sends a `factsheetRequest` instant action and waits 5 s. Without a factsheet the editors offer the standard VDA5050 actions. A factsheet that arrives wrapped as `{"data": "<json>"}` (e.g. a string message forwarded by a bridge) is accepted and marked in the editor.
 
+### Drawing Orders
+
+While **Create Order** is open, the order being edited is drawn on the graph in orange, next to the robots and their received orders. Edges that do not connect consecutive nodes with matching sequence ids are drawn in red, and the form lists the problems.
+
+**Draw on Map** turns the graph into a drawing surface:
+
+- Click the map to add a node at that position (metres, map frame). Each new node is connected to the previous one by an edge, with sequence ids 0, 2, 4, … for nodes and 1, 3, 5, … for edges. New nodes take the `mapId` of the previous node, or the robot's `agvPosition.mapId`.
+- Click a robot to add a node at its current pose (with its `lastNodeId` as node id when known), or a node of a received order or of the draft to add it again with the same node id, e.g. for loops.
+- Drag drawn nodes to move them. Drag the handle at the end of a node's arrow to set `theta`; hold Shift to snap to 15°. A dashed arrow means `theta` is not set.
+- **Undo Node** removes the last node and its edge. **Link Nodes** renumbers the sequence ids and connects consecutive nodes after manual edits in the form.
+
+Outside draw mode, clicking a drawn node highlights it in the form.
+
 ### Updates
 
 - Actions are listing on the path

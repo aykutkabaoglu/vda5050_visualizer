@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { ref, unref } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  unref,
+  watch,
+} from "vue";
+import type { Ref } from "vue";
 import { useVDA5050 } from "@/composables/useVDA5050";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +21,8 @@ import { BlockingType as BlockingTypeEnum } from "@/types/vda5050.types";
 import ActionEditor from "@/components/ActionEditor.vue";
 import FactsheetStatus from "@/components/FactsheetStatus.vue";
 import { useFactsheet } from "@/composables/useFactsheet";
+import { useOrderDraftStore } from "@/stores/orderDraft";
+import { chainIssues, type OrderChain } from "@/utils/order-draft";
 
 const props = defineProps<{
   agvId: { manufacturer: string; serialNumber: string };
@@ -70,6 +81,32 @@ if (props.existingOrder) {
     edges: props.existingOrder.edges || [],
   };
 }
+
+// Share the draft with the graph for the preview and drawing on the map
+const draft = useOrderDraftStore();
+const draftForm = orderForm as unknown as Ref<OrderChain>;
+onMounted(() => draft.attach(draftForm, props.agvId));
+onBeforeUnmount(() => draft.detach(draftForm));
+
+const pathIssues = computed(() => chainIssues(orderForm.value));
+
+const toggleDrawMode = () => {
+  draft.drawMode = !draft.drawMode;
+  if (draft.drawMode) expandedSections.value.add("order-nodes");
+};
+
+// Show the node selected on the graph
+watch(
+  () => draft.selectedIndex,
+  async (index) => {
+    if (index === null) return;
+    expandedSections.value.add("order-nodes");
+    await nextTick();
+    document
+      .getElementById(`order-node-${index}`)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+);
 
 // Build Order from form data
 const buildOrderFromForm = (): Order => {
@@ -430,14 +467,68 @@ const generateRandomOrderAndPublish = () => {
             Add Node
           </Button>
         </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            :variant="draft.drawMode ? 'default' : 'outline'"
+            class="h-7 text-xs"
+            @click="toggleDrawMode"
+          >
+            <Icon icon="material-symbols:draw-outline" class="w-3 h-3 mr-1" />
+            {{ draft.drawMode ? "Drawing on Map" : "Draw on Map" }}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            class="h-7 text-xs"
+            :disabled="orderForm.nodes.length === 0"
+            @click="draft.undoLastNode()"
+          >
+            <Icon icon="material-symbols:undo" class="w-3 h-3 mr-1" />
+            Undo Node
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            class="h-7 text-xs"
+            title="Renumber sequence ids and connect consecutive nodes with edges"
+            @click="draft.relink()"
+          >
+            <Icon icon="material-symbols:link" class="w-3 h-3 mr-1" />
+            Link Nodes
+          </Button>
+        </div>
+        <p v-if="draft.drawMode" class="text-xs text-muted-foreground">
+          Click the map to add a node, click a robot, an order node or a drawn
+          node to add it again. Drag nodes to move them and the handle to set
+          theta.
+        </p>
+        <div
+          v-if="pathIssues.length > 0"
+          class="text-xs text-red-500 bg-red-50 dark:bg-red-950 p-2 rounded"
+        >
+          <div v-for="issue in pathIssues" :key="issue">{{ issue }}</div>
+          <div class="text-muted-foreground">
+            Link Nodes fixes the edges and sequence ids.
+          </div>
+        </div>
         <div v-if="expandedSections.has('order-nodes')" class="space-y-3 pt-2">
           <div
             v-for="(node, nodeIndex) in orderForm.nodes"
+            :id="'order-node-' + nodeIndex"
             :key="nodeIndex"
             class="border rounded p-3 space-y-2 bg-muted/30"
+            :class="{
+              'ring-2 ring-violet-600': draft.selectedIndex === nodeIndex,
+            }"
           >
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium">Node {{ nodeIndex + 1 }}</span>
+              <span
+                class="text-xs font-medium cursor-pointer"
+                title="Highlight on the map"
+                @click="draft.selectedIndex = nodeIndex"
+                >Node {{ nodeIndex + 1 }}</span
+              >
               <Button
                 size="sm"
                 variant="ghost"
@@ -505,7 +596,27 @@ const generateRandomOrderAndPublish = () => {
                   class="h-7 text-xs"
                 />
               </div>
-              <div class="space-y-1">
+              <div>
+                <Label class="text-xs">Theta (rad)</Label>
+                <Input
+                  :model-value="node.nodePosition.theta ?? ''"
+                  type="number"
+                  step="0.01"
+                  placeholder="not set"
+                  class="h-7 text-xs"
+                  @update:model-value="
+                    (val) => {
+                      if (!node.nodePosition) return;
+                      if (val === '' || val === undefined) {
+                        delete node.nodePosition.theta;
+                      } else {
+                        node.nodePosition.theta = Number(val);
+                      }
+                    }
+                  "
+                />
+              </div>
+              <div class="space-y-1 col-span-3">
                 <Label class="text-xs">Map ID</Label>
                 <div class="flex gap-1">
                   <Input
