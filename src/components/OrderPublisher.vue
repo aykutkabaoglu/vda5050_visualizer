@@ -4,6 +4,7 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  reactive,
   ref,
   unref,
   watch,
@@ -94,6 +95,20 @@ onMounted(() => draft.attach(draftForm, props.agvId));
 onBeforeUnmount(() => draft.detach(draftForm));
 
 const pathIssues = computed(() => chainIssues(orderForm.value));
+
+// Expanded node and edge cards; new cards and the node selected on the
+// graph are expanded, the others show a one-line summary
+const openItems = reactive(new Set<object>());
+const isOpen = (item: object) => openItems.has(item);
+const toggleOpen = (item: object) => {
+  if (openItems.has(item)) openItems.delete(item);
+  else openItems.add(item);
+};
+const setAllOpen = (items: object[], open: boolean) => {
+  items.forEach((item) =>
+    open ? openItems.add(item) : openItems.delete(item)
+  );
+};
 const decisionPoint = computed(() => decisionPointIndex(orderForm.value));
 
 const toggleDrawMode = () => {
@@ -107,6 +122,10 @@ watch(
   async (index) => {
     if (index === null) return;
     expandedSections.value.add("order-nodes");
+    // Show only the selected node expanded
+    setAllOpen(orderForm.value.nodes, false);
+    const node = orderForm.value.nodes[index];
+    if (node) openItems.add(node);
     await nextTick();
     document
       .getElementById(`order-node-${index}`)
@@ -181,6 +200,7 @@ const addNode = () => {
     released: true,
     actions: [],
   });
+  openItems.add(orderForm.value.nodes[orderForm.value.nodes.length - 1]);
 };
 
 const removeNode = (index: number) => {
@@ -196,6 +216,7 @@ const addEdge = () => {
     released: true,
     actions: [],
   });
+  openItems.add(orderForm.value.edges[orderForm.value.edges.length - 1]);
 };
 
 const removeEdge = (index: number) => {
@@ -465,8 +486,26 @@ const generateRandomOrderAndPublish = () => {
           </div>
           <Button
             size="sm"
+            variant="ghost"
+            class="h-7 w-7 p-0 ml-2"
+            title="Expand all"
+            @click="setAllOpen(orderForm.nodes, true)"
+          >
+            <Icon icon="material-symbols:unfold-more" class="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            class="h-7 w-7 p-0"
+            title="Collapse all"
+            @click="setAllOpen(orderForm.nodes, false)"
+          >
+            <Icon icon="material-symbols:unfold-less" class="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
             variant="outline"
-            class="h-7 text-xs ml-2"
+            class="h-7 text-xs"
             @click="addNode"
           >
             <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
@@ -529,6 +568,21 @@ const generateRandomOrderAndPublish = () => {
             }"
           >
             <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="p-0.5 rounded hover:bg-muted"
+                :title="isOpen(node) ? 'Collapse' : 'Expand'"
+                @click="toggleOpen(node)"
+              >
+                <Icon
+                  :icon="
+                    isOpen(node)
+                      ? 'material-symbols:expand-more'
+                      : 'material-symbols:chevron-right'
+                  "
+                  class="w-4 h-4"
+                />
+              </button>
               <span
                 class="text-xs font-medium cursor-pointer"
                 title="Highlight on the map"
@@ -551,6 +605,16 @@ const generateRandomOrderAndPublish = () => {
                     ? "Base"
                     : "Horizon"
                 }}
+              </span>
+              <span
+                v-if="!isOpen(node)"
+                class="text-[10px] text-muted-foreground truncate"
+              >
+                {{ node.nodeId }} · {{ node.sequenceId }}
+                <template v-if="node.nodePosition">
+                  · ({{ node.nodePosition.x }}, {{ node.nodePosition.y }})
+                </template>
+                · {{ node.actions?.length || 0 }} actions
               </span>
               <div class="flex-1" />
               <Button
@@ -575,128 +639,130 @@ const generateRandomOrderAndPublish = () => {
                 <Icon icon="material-symbols:delete" class="w-3 h-3" />
               </Button>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Node ID</Label>
-                <Input v-model="node.nodeId" class="h-7 text-xs" />
-              </div>
-              <div>
-                <Label class="text-xs">Sequence ID</Label>
-                <Input
-                  v-model.number="node.sequenceId"
-                  type="number"
-                  class="h-7 text-xs"
-                />
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                v-model="node.released"
-                :id="'node-released-' + nodeIndex"
-                class="w-4 h-4"
-              />
-              <Label
-                :for="'node-released-' + nodeIndex"
-                class="text-xs cursor-pointer"
-                >Released</Label
-              >
-            </div>
-            <div v-if="!node.nodePosition" class="pt-1">
-              <Button
-                size="sm"
-                variant="outline"
-                class="h-6 text-xs"
-                @click="node.nodePosition = { x: 0, y: 0, mapId: '' }"
-              >
-                <Icon
-                  icon="material-symbols:add-location"
-                  class="w-3 h-3 mr-1"
-                />
-                Add Position
-              </Button>
-            </div>
-            <div v-else class="grid grid-cols-3 gap-2">
-              <div>
-                <Label class="text-xs">X</Label>
-                <Input
-                  v-model.number="node.nodePosition.x"
-                  type="number"
-                  class="h-7 text-xs"
-                />
-              </div>
-              <div>
-                <Label class="text-xs">Y</Label>
-                <Input
-                  v-model.number="node.nodePosition.y"
-                  type="number"
-                  class="h-7 text-xs"
-                />
-              </div>
-              <div>
-                <Label class="text-xs">Theta (rad)</Label>
-                <Input
-                  :model-value="node.nodePosition.theta ?? ''"
-                  type="number"
-                  step="0.01"
-                  placeholder="not set"
-                  class="h-7 text-xs"
-                  @update:model-value="
-                    (val) => {
-                      if (!node.nodePosition) return;
-                      if (val === '' || val === undefined) {
-                        delete node.nodePosition.theta;
-                      } else {
-                        node.nodePosition.theta = Number(val);
-                      }
-                    }
-                  "
-                />
-              </div>
-              <div class="space-y-1 col-span-3">
-                <Label class="text-xs">Map ID</Label>
-                <div class="flex gap-1">
+            <div v-if="isOpen(node)" class="space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <Label class="text-xs">Node ID</Label>
+                  <Input v-model="node.nodeId" class="h-7 text-xs" />
+                </div>
+                <div>
+                  <Label class="text-xs">Sequence ID</Label>
                   <Input
-                    v-model="node.nodePosition.mapId"
-                    class="h-7 text-xs flex-1"
+                    v-model.number="node.sequenceId"
+                    type="number"
+                    class="h-7 text-xs"
                   />
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  v-model="node.released"
+                  :id="'node-released-' + nodeIndex"
+                  class="w-4 h-4"
+                />
+                <Label
+                  :for="'node-released-' + nodeIndex"
+                  class="text-xs cursor-pointer"
+                  >Released</Label
+                >
+              </div>
+              <div v-if="!node.nodePosition" class="pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  class="h-6 text-xs"
+                  @click="node.nodePosition = { x: 0, y: 0, mapId: '' }"
+                >
+                  <Icon
+                    icon="material-symbols:add-location"
+                    class="w-3 h-3 mr-1"
+                  />
+                  Add Position
+                </Button>
+              </div>
+              <div v-else class="grid grid-cols-3 gap-2">
+                <div>
+                  <Label class="text-xs">X</Label>
+                  <Input
+                    v-model.number="node.nodePosition.x"
+                    type="number"
+                    class="h-7 text-xs"
+                  />
+                </div>
+                <div>
+                  <Label class="text-xs">Y</Label>
+                  <Input
+                    v-model.number="node.nodePosition.y"
+                    type="number"
+                    class="h-7 text-xs"
+                  />
+                </div>
+                <div>
+                  <Label class="text-xs">Theta (rad)</Label>
+                  <Input
+                    :model-value="node.nodePosition.theta ?? ''"
+                    type="number"
+                    step="0.01"
+                    placeholder="not set"
+                    class="h-7 text-xs"
+                    @update:model-value="
+                      (val) => {
+                        if (!node.nodePosition) return;
+                        if (val === '' || val === undefined) {
+                          delete node.nodePosition.theta;
+                        } else {
+                          node.nodePosition.theta = Number(val);
+                        }
+                      }
+                    "
+                  />
+                </div>
+                <div class="space-y-1 col-span-3">
+                  <Label class="text-xs">Map ID</Label>
+                  <div class="flex gap-1">
+                    <Input
+                      v-model="node.nodePosition.mapId"
+                      class="h-7 text-xs flex-1"
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      class="h-7 w-7 p-0"
+                      @click="node.nodePosition = undefined"
+                    >
+                      <Icon icon="material-symbols:close" class="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <Label class="text-xs"
+                    >Actions ({{ node.actions?.length || 0 }})</Label
+                  >
                   <Button
                     size="sm"
                     variant="ghost"
-                    class="h-7 w-7 p-0"
-                    @click="node.nodePosition = undefined"
+                    class="h-6 text-xs"
+                    @click="addActionToNode(nodeIndex)"
                   >
-                    <Icon icon="material-symbols:close" class="w-3 h-3" />
+                    <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
+                    Add Action
                   </Button>
                 </div>
-              </div>
-            </div>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <Label class="text-xs"
-                  >Actions ({{ node.actions?.length || 0 }})</Label
+                <div
+                  v-for="(action, actionIndex) in node.actions"
+                  :key="actionIndex"
+                  class="pl-2 border-l-2 space-y-2 bg-background/50 p-2 rounded"
                 >
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  class="h-6 text-xs"
-                  @click="addActionToNode(nodeIndex)"
-                >
-                  <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
-                  Add Action
-                </Button>
-              </div>
-              <div
-                v-for="(action, actionIndex) in node.actions"
-                :key="actionIndex"
-                class="pl-2 border-l-2 space-y-2 bg-background/50 p-2 rounded"
-              >
-                <ActionEditor
-                  v-model:action="node.actions[actionIndex]"
-                  scope="NODE"
-                  :catalog="factsheet.catalog.value"
-                  @remove="removeActionFromNode(nodeIndex, actionIndex)"
-                />
+                  <ActionEditor
+                    v-model:action="node.actions[actionIndex]"
+                    scope="NODE"
+                    :catalog="factsheet.catalog.value"
+                    @remove="removeActionFromNode(nodeIndex, actionIndex)"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -724,8 +790,26 @@ const generateRandomOrderAndPublish = () => {
           </div>
           <Button
             size="sm"
+            variant="ghost"
+            class="h-7 w-7 p-0 ml-2"
+            title="Expand all"
+            @click="setAllOpen(orderForm.edges, true)"
+          >
+            <Icon icon="material-symbols:unfold-more" class="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            class="h-7 w-7 p-0"
+            title="Collapse all"
+            @click="setAllOpen(orderForm.edges, false)"
+          >
+            <Icon icon="material-symbols:unfold-less" class="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
             variant="outline"
-            class="h-7 text-xs ml-2"
+            class="h-7 text-xs"
             @click="addEdge"
           >
             <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
@@ -738,8 +822,31 @@ const generateRandomOrderAndPublish = () => {
             :key="edgeIndex"
             class="border rounded p-3 space-y-2 bg-muted/30"
           >
-            <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="p-0.5 rounded hover:bg-muted"
+                :title="isOpen(edge) ? 'Collapse' : 'Expand'"
+                @click="toggleOpen(edge)"
+              >
+                <Icon
+                  :icon="
+                    isOpen(edge)
+                      ? 'material-symbols:expand-more'
+                      : 'material-symbols:chevron-right'
+                  "
+                  class="w-4 h-4"
+                />
+              </button>
               <span class="text-xs font-medium">Edge {{ edgeIndex + 1 }}</span>
+              <span
+                v-if="!isOpen(edge)"
+                class="text-[10px] text-muted-foreground truncate"
+              >
+                {{ edge.edgeId }} · {{ edge.startNodeId }} →
+                {{ edge.endNodeId }} · {{ edge.actions?.length || 0 }} actions
+              </span>
+              <div class="flex-1" />
               <Button
                 size="sm"
                 variant="ghost"
@@ -749,69 +856,71 @@ const generateRandomOrderAndPublish = () => {
                 <Icon icon="material-symbols:delete" class="w-3 h-3" />
               </Button>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Edge ID</Label>
-                <Input v-model="edge.edgeId" class="h-7 text-xs" />
+            <div v-if="isOpen(edge)" class="space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <Label class="text-xs">Edge ID</Label>
+                  <Input v-model="edge.edgeId" class="h-7 text-xs" />
+                </div>
+                <div>
+                  <Label class="text-xs">Sequence ID</Label>
+                  <Input
+                    v-model.number="edge.sequenceId"
+                    type="number"
+                    class="h-7 text-xs"
+                  />
+                </div>
               </div>
-              <div>
-                <Label class="text-xs">Sequence ID</Label>
-                <Input
-                  v-model.number="edge.sequenceId"
-                  type="number"
-                  class="h-7 text-xs"
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <Label class="text-xs">Start Node ID</Label>
+                  <Input v-model="edge.startNodeId" class="h-7 text-xs" />
+                </div>
+                <div>
+                  <Label class="text-xs">End Node ID</Label>
+                  <Input v-model="edge.endNodeId" class="h-7 text-xs" />
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  v-model="edge.released"
+                  :id="'edge-released-' + edgeIndex"
+                  class="w-4 h-4"
                 />
-              </div>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Start Node ID</Label>
-                <Input v-model="edge.startNodeId" class="h-7 text-xs" />
-              </div>
-              <div>
-                <Label class="text-xs">End Node ID</Label>
-                <Input v-model="edge.endNodeId" class="h-7 text-xs" />
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                v-model="edge.released"
-                :id="'edge-released-' + edgeIndex"
-                class="w-4 h-4"
-              />
-              <Label
-                :for="'edge-released-' + edgeIndex"
-                class="text-xs cursor-pointer"
-                >Released</Label
-              >
-            </div>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <Label class="text-xs"
-                  >Actions ({{ edge.actions?.length || 0 }})</Label
+                <Label
+                  :for="'edge-released-' + edgeIndex"
+                  class="text-xs cursor-pointer"
+                  >Released</Label
                 >
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  class="h-6 text-xs"
-                  @click="addActionToEdge(edgeIndex)"
-                >
-                  <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
-                  Add Action
-                </Button>
               </div>
-              <div
-                v-for="(action, actionIndex) in edge.actions"
-                :key="actionIndex"
-                class="pl-2 border-l-2 space-y-2 bg-background/50 p-2 rounded"
-              >
-                <ActionEditor
-                  v-model:action="edge.actions[actionIndex]"
-                  scope="EDGE"
-                  :catalog="factsheet.catalog.value"
-                  @remove="removeActionFromEdge(edgeIndex, actionIndex)"
-                />
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <Label class="text-xs"
+                    >Actions ({{ edge.actions?.length || 0 }})</Label
+                  >
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    class="h-6 text-xs"
+                    @click="addActionToEdge(edgeIndex)"
+                  >
+                    <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
+                    Add Action
+                  </Button>
+                </div>
+                <div
+                  v-for="(action, actionIndex) in edge.actions"
+                  :key="actionIndex"
+                  class="pl-2 border-l-2 space-y-2 bg-background/50 p-2 rounded"
+                >
+                  <ActionEditor
+                    v-model:action="edge.actions[actionIndex]"
+                    scope="EDGE"
+                    :catalog="factsheet.catalog.value"
+                    @remove="removeActionFromEdge(edgeIndex, actionIndex)"
+                  />
+                </div>
               </div>
             </div>
           </div>

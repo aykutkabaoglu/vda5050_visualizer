@@ -40,6 +40,9 @@ const catalogAction = computed(() =>
   findCatalogAction(scopeActions.value, action.value.actionType)
 );
 
+// New actions (no type yet) start expanded, existing ones as a one-line summary
+const open = ref(!action.value.actionType);
+
 // True when the action type is typed by hand instead of picked from the catalog
 const customMode = ref(!!action.value.actionType && !catalogAction.value);
 
@@ -126,151 +129,181 @@ function removeParameter(index: number) {
 
 <template>
   <div class="space-y-2">
-    <div class="grid grid-cols-2 gap-2">
-      <div>
-        <Label class="text-xs">Action ID</Label>
+    <div class="flex items-center gap-1 text-xs">
+      <button
+        type="button"
+        class="p-0.5 rounded hover:bg-muted"
+        :title="open ? 'Collapse' : 'Expand'"
+        @click="open = !open"
+      >
+        <Icon
+          :icon="
+            open
+              ? 'material-symbols:expand-more'
+              : 'material-symbols:chevron-right'
+          "
+          class="w-4 h-4"
+        />
+      </button>
+      <span class="font-medium truncate">
+        {{ action.actionId }}
+      </span>
+      <span class="text-muted-foreground truncate">
+        · {{ action.actionType || "no type" }} · {{ action.blockingType }} ·
+        {{ parameters.length }} parameters
+      </span>
+      <div class="flex-1" />
+      <Button
+        size="sm"
+        variant="ghost"
+        class="h-6 w-6 p-0 shrink-0"
+        title="Remove action"
+        @click="emit('remove')"
+      >
+        <Icon icon="material-symbols:delete" class="w-3 h-3" />
+      </Button>
+    </div>
+    <div v-if="open" class="space-y-2">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <Label class="text-xs">Action ID</Label>
+          <Input
+            v-model="action.actionId"
+            placeholder="Action ID"
+            class="h-7 text-xs"
+          />
+        </div>
+        <div>
+          <Label class="text-xs">Action Type</Label>
+          <select
+            v-model="selectedType"
+            class="h-7 text-xs w-full rounded border px-2 bg-background"
+          >
+            <option value="">Select action type...</option>
+            <option
+              v-for="option in scopeActions"
+              :key="option.actionType"
+              :value="option.actionType"
+            >
+              {{ option.actionType }}
+            </option>
+            <option :value="CUSTOM">Custom...</option>
+          </select>
+        </div>
+      </div>
+      <div v-if="selectedType === CUSTOM" class="space-y-1">
+        <Label class="text-xs">Custom Action Type</Label>
         <Input
-          v-model="action.actionId"
-          placeholder="Action ID"
+          v-model="action.actionType"
+          placeholder="Enter custom action type"
           class="h-7 text-xs"
         />
       </div>
+      <div
+        v-if="catalogAction?.description"
+        class="text-xs text-muted-foreground italic bg-muted/30 p-2 rounded"
+      >
+        {{ catalogAction.description }}
+      </div>
       <div>
-        <Label class="text-xs">Action Type</Label>
+        <Label class="text-xs">Blocking Type</Label>
         <select
-          v-model="selectedType"
+          v-model="action.blockingType"
           class="h-7 text-xs w-full rounded border px-2 bg-background"
         >
-          <option value="">Select action type...</option>
-          <option
-            v-for="option in scopeActions"
-            :key="option.actionType"
-            :value="option.actionType"
-          >
-            {{ option.actionType }}
+          <option v-for="type in blockingTypes" :key="type" :value="type">
+            {{ type }}
           </option>
-          <option :value="CUSTOM">Custom...</option>
         </select>
       </div>
-    </div>
-    <div v-if="selectedType === CUSTOM" class="space-y-1">
-      <Label class="text-xs">Custom Action Type</Label>
-      <Input
-        v-model="action.actionType"
-        placeholder="Enter custom action type"
-        class="h-7 text-xs"
-      />
-    </div>
-    <div
-      v-if="catalogAction?.description"
-      class="text-xs text-muted-foreground italic bg-muted/30 p-2 rounded"
-    >
-      {{ catalogAction.description }}
-    </div>
-    <div>
-      <Label class="text-xs">Blocking Type</Label>
-      <select
-        v-model="action.blockingType"
-        class="h-7 text-xs w-full rounded border px-2 bg-background"
-      >
-        <option v-for="type in blockingTypes" :key="type" :value="type">
-          {{ type }}
-        </option>
-      </select>
-    </div>
-    <div class="space-y-1">
-      <Label class="text-xs">Action Description (Optional)</Label>
-      <Textarea
-        v-model="action.actionDescription"
-        class="h-12 text-xs"
-        placeholder="Additional information on the action"
-      />
-    </div>
-    <div class="space-y-2">
-      <div class="flex items-center justify-between">
-        <Label class="text-xs">Parameters ({{ parameters.length }})</Label>
-        <Button
-          size="sm"
-          variant="ghost"
-          class="h-6 text-xs"
-          @click="addParameter()"
-        >
-          <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
-          Add Parameter
-        </Button>
+      <div class="space-y-1">
+        <Label class="text-xs">Action Description (Optional)</Label>
+        <Textarea
+          v-model="action.actionDescription"
+          class="h-12 text-xs"
+          placeholder="Additional information on the action"
+        />
       </div>
-      <div
-        v-for="(param, paramIndex) in parameters"
-        :key="paramIndex"
-        class="pl-2 border-l-2 space-y-1"
-      >
-        <div class="grid grid-cols-2 gap-2">
-          <Input
-            :model-value="param.key"
-            placeholder="Key"
-            class="h-6 text-xs"
-            @update:model-value="(val) => setParameterKey(param, String(val))"
-          />
-          <Input
-            :model-value="parameterText(param)"
-            :placeholder="
-              catalogParameter(param.key)?.valueDataType ??
-              'Value (JSON for arrays/objects)'
-            "
-            class="h-6 text-xs"
-            :class="{ 'border-red-500': parameterError(param) }"
-            @update:model-value="(val) => setParameterText(param, String(val))"
-          />
-        </div>
-        <div class="flex items-center justify-between gap-2">
-          <div class="text-[10px] text-muted-foreground truncate">
-            <template v-if="catalogParameter(param.key)">
-              {{ catalogParameter(param.key)?.valueDataType }}
-              {{
-                catalogParameter(param.key)?.isOptional
-                  ? "· optional"
-                  : "· required"
-              }}
-              <template v-if="catalogParameter(param.key)?.description">
-                · {{ catalogParameter(param.key)?.description }}
-              </template>
-            </template>
-            <span v-if="parameterError(param)" class="text-red-500">
-              {{ parameterError(param) }}
-            </span>
-          </div>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <Label class="text-xs">Parameters ({{ parameters.length }})</Label>
           <Button
             size="sm"
             variant="ghost"
-            class="h-5 text-xs shrink-0"
-            @click="removeParameter(paramIndex)"
+            class="h-6 text-xs"
+            @click="addParameter()"
           >
-            Remove
+            <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
+            Add Parameter
+          </Button>
+        </div>
+        <div
+          v-for="(param, paramIndex) in parameters"
+          :key="paramIndex"
+          class="pl-2 border-l-2 space-y-1"
+        >
+          <div class="grid grid-cols-2 gap-2">
+            <Input
+              :model-value="param.key"
+              placeholder="Key"
+              class="h-6 text-xs"
+              @update:model-value="(val) => setParameterKey(param, String(val))"
+            />
+            <Input
+              :model-value="parameterText(param)"
+              :placeholder="
+                catalogParameter(param.key)?.valueDataType ??
+                'Value (JSON for arrays/objects)'
+              "
+              class="h-6 text-xs"
+              :class="{ 'border-red-500': parameterError(param) }"
+              @update:model-value="
+                (val) => setParameterText(param, String(val))
+              "
+            />
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-[10px] text-muted-foreground truncate">
+              <template v-if="catalogParameter(param.key)">
+                {{ catalogParameter(param.key)?.valueDataType }}
+                {{
+                  catalogParameter(param.key)?.isOptional
+                    ? "· optional"
+                    : "· required"
+                }}
+                <template v-if="catalogParameter(param.key)?.description">
+                  · {{ catalogParameter(param.key)?.description }}
+                </template>
+              </template>
+              <span v-if="parameterError(param)" class="text-red-500">
+                {{ parameterError(param) }}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              class="h-5 text-xs shrink-0"
+              @click="removeParameter(paramIndex)"
+            >
+              Remove
+            </Button>
+          </div>
+        </div>
+        <div v-if="missingParameters.length > 0" class="flex flex-wrap gap-1">
+          <Button
+            v-for="param in missingParameters"
+            :key="param.key"
+            size="sm"
+            variant="outline"
+            class="h-5 px-2 text-[10px]"
+            :class="{ 'border-red-500': !param.isOptional }"
+            :title="param.description"
+            @click="addParameter(param.key)"
+          >
+            + {{ param.key }}{{ param.isOptional ? "" : " *" }}
           </Button>
         </div>
       </div>
-      <div v-if="missingParameters.length > 0" class="flex flex-wrap gap-1">
-        <Button
-          v-for="param in missingParameters"
-          :key="param.key"
-          size="sm"
-          variant="outline"
-          class="h-5 px-2 text-[10px]"
-          :class="{ 'border-red-500': !param.isOptional }"
-          :title="param.description"
-          @click="addParameter(param.key)"
-        >
-          + {{ param.key }}{{ param.isOptional ? "" : " *" }}
-        </Button>
-      </div>
     </div>
-    <Button
-      size="sm"
-      variant="ghost"
-      class="h-5 text-xs"
-      @click="emit('remove')"
-    >
-      Remove Action
-    </Button>
   </div>
 </template>
