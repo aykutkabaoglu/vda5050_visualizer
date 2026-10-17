@@ -120,10 +120,40 @@ export function edgeIssues(chain: OrderChain, index: number): string[] {
   ) {
     issues.push("sequenceId");
   }
+  // An edge is released only with both its nodes, and nothing released
+  // follows an unreleased edge (VDA5050 2.1.0, 6.6.1)
   if (edge.released && !(start.released && end.released)) {
     issues.push("released");
   }
+  if (!edge.released && end.released) {
+    issues.push("base after horizon");
+  }
   return issues;
+}
+
+/**
+ * Index of the decision point, the last node of the base (VDA5050 2.1.0,
+ * 6.6.2); -1 when the first node is not released.
+ */
+export function decisionPointIndex(chain: OrderChain): number {
+  let index = -1;
+  while (index + 1 < chain.nodes.length && chain.nodes[index + 1].released) {
+    index++;
+  }
+  return index;
+}
+
+/**
+ * Makes nodes 0..index and the edges between them the base and everything
+ * after them the horizon.
+ */
+export function releaseUpTo(chain: OrderChain, index: number) {
+  chain.nodes.forEach((node, i) => {
+    node.released = i <= index;
+  });
+  chain.edges.forEach((edge, i) => {
+    edge.released = i + 1 <= index;
+  });
 }
 
 /** Problems of the whole chain, for a summary next to the form */

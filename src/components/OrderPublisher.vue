@@ -22,7 +22,11 @@ import ActionEditor from "@/components/ActionEditor.vue";
 import FactsheetStatus from "@/components/FactsheetStatus.vue";
 import { useFactsheet } from "@/composables/useFactsheet";
 import { useOrderDraftStore } from "@/stores/orderDraft";
-import { chainIssues, type OrderChain } from "@/utils/order-draft";
+import {
+  chainIssues,
+  decisionPointIndex,
+  type OrderChain,
+} from "@/utils/order-draft";
 
 const props = defineProps<{
   agvId: { manufacturer: string; serialNumber: string };
@@ -77,8 +81,9 @@ if (props.existingOrder) {
     orderId: props.existingOrder.orderId,
     orderUpdateId: (props.existingOrder.orderUpdateId || 0) + 1,
     zoneSetId: props.existingOrder.zoneSetId || "",
-    nodes: props.existingOrder.nodes || [],
-    edges: props.existingOrder.edges || [],
+    // Copies, so editing the form does not change the received order
+    nodes: JSON.parse(JSON.stringify(props.existingOrder.nodes || [])),
+    edges: JSON.parse(JSON.stringify(props.existingOrder.edges || [])),
   };
 }
 
@@ -89,6 +94,7 @@ onMounted(() => draft.attach(draftForm, props.agvId));
 onBeforeUnmount(() => draft.detach(draftForm));
 
 const pathIssues = computed(() => chainIssues(orderForm.value));
+const decisionPoint = computed(() => decisionPointIndex(orderForm.value));
 
 const toggleDrawMode = () => {
   draft.drawMode = !draft.drawMode;
@@ -522,13 +528,44 @@ const generateRandomOrderAndPublish = () => {
               'ring-2 ring-violet-600': draft.selectedIndex === nodeIndex,
             }"
           >
-            <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
               <span
                 class="text-xs font-medium cursor-pointer"
                 title="Highlight on the map"
                 @click="draft.selectedIndex = nodeIndex"
                 >Node {{ nodeIndex + 1 }}</span
               >
+              <span
+                class="text-[10px] px-1.5 rounded"
+                :class="
+                  node.released
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-orange-200 text-orange-900'
+                "
+              >
+                {{
+                  nodeIndex === decisionPoint &&
+                  nodeIndex < orderForm.nodes.length - 1
+                    ? "Decision point"
+                    : node.released
+                    ? "Base"
+                    : "Horizon"
+                }}
+              </span>
+              <div class="flex-1" />
+              <Button
+                size="sm"
+                variant="ghost"
+                class="h-6 text-[10px] px-1.5"
+                title="Release the nodes up to this one (base); the nodes after it become the horizon"
+                @click="draft.releaseUpTo(nodeIndex)"
+              >
+                <Icon
+                  icon="material-symbols:flag-outline"
+                  class="w-3 h-3 mr-1"
+                />
+                Release up to here
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"

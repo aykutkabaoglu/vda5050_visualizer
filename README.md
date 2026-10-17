@@ -164,6 +164,8 @@ While **Create Order** is open, the order being edited is drawn on the graph in 
 
 Outside draw mode, clicking a drawn node highlights it in the form.
 
+**Base and horizon** (VDA5050 2.1.0, 6.6.1–6.6.2): each node in the form is marked *Base*, *Decision point* (the last base node) or *Horizon*. **Release up to here** releases the nodes and edges up to that node and makes the rest the horizon. In the preview the base is solid orange and the horizon light orange and dashed. A released edge with an unreleased node, or a released node after an unreleased edge, is marked as an error.
+
 ### Updates
 
 - Actions are listing on the path

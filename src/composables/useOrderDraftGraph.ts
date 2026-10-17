@@ -2,13 +2,19 @@ import { computed } from "vue";
 import type { Edges, Layouts, Nodes } from "v-network-graph";
 import { useOrderDraftStore } from "@/stores/orderDraft";
 import { useMqttStore } from "@/stores/mqtt";
-import { edgeIssues, type NewNode } from "@/utils/order-draft";
+import {
+  decisionPointIndex,
+  edgeIssues,
+  type NewNode,
+} from "@/utils/order-draft";
 
 const DRAFT_NODE_PREFIX = "draft:";
 const DRAFT_EDGE_PREFIX = "draft-edge:";
 const ROBOT_NODE_PREFIX = "robot_";
 
 export const DRAFT_COLOR = "#f97316";
+/** Horizon (unreleased) nodes and edges of the draft */
+export const DRAFT_HORIZON_COLOR = "#fdba74";
 export const DRAFT_SELECTED_COLOR = "#7c3aed";
 export const DRAFT_ERROR_COLOR = "#dc2626";
 
@@ -33,12 +39,22 @@ export function useOrderDraftGraph() {
 
   const nodes = computed<Nodes>(() => {
     const result: Nodes = {};
-    draft.chain?.nodes.forEach((node, index) => {
+    const chain = draft.chain;
+    const decisionPoint = chain ? decisionPointIndex(chain) : -1;
+    chain?.nodes.forEach((node, index) => {
       if (!node.nodePosition) return;
       const selected = draft.selectedIndex === index;
+      const decision =
+        index === decisionPoint && decisionPoint < chain.nodes.length - 1;
       result[draftNodeKey(index)] = {
-        name: `${node.nodeId} (${node.sequenceId})`,
-        color: selected ? DRAFT_SELECTED_COLOR : DRAFT_COLOR,
+        name: `${node.nodeId} (${node.sequenceId})${
+          decision ? " · decision point" : ""
+        }`,
+        color: selected
+          ? DRAFT_SELECTED_COLOR
+          : node.released
+          ? DRAFT_COLOR
+          : DRAFT_HORIZON_COLOR,
         zIndex: selected ? 60 : 50,
         draft: true,
       };
@@ -70,7 +86,14 @@ export function useOrderDraftGraph() {
       result[`${DRAFT_EDGE_PREFIX}${index}`] = {
         source: draftNodeKey(index + 1),
         target: draftNodeKey(index),
-        color: issues.length > 0 ? DRAFT_ERROR_COLOR : DRAFT_COLOR,
+        color:
+          issues.length > 0
+            ? DRAFT_ERROR_COLOR
+            : edge.released
+            ? DRAFT_COLOR
+            : DRAFT_HORIZON_COLOR,
+        // Base edges solid, horizon edges dashed
+        dasharray: edge.released ? "none" : "8 6",
         label:
           issues.length > 0
             ? `${edge.edgeId} (${issues.join(", ")})`

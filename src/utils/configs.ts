@@ -109,7 +109,8 @@ export function createConfigs(
       normal: {
         width: 3,
         color: (edge) => edge.color,
-        dasharray: "20 16",
+        // Edges may set their own dash pattern (e.g. the order draft)
+        dasharray: (edge) => edge.dasharray ?? "20 16",
         animate: false,
         animationSpeed: -20,
       },

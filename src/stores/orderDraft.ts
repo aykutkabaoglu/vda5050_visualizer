@@ -6,6 +6,7 @@ import {
   appendNode,
   removeLastNode,
   relinkChain,
+  releaseUpTo as releaseChainUpTo,
   type NewNode,
   type OrderChain,
 } from "@/utils/order-draft";
@@ -58,6 +59,11 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     if (chain.value) relinkChain(chain.value);
   }
 
+  /** Nodes up to index become the base, the rest the horizon */
+  function releaseUpTo(index: number) {
+    if (chain.value) releaseChainUpTo(chain.value, index);
+  }
+
   function moveNode(index: number, x: number, y: number) {
     const node = chain.value?.nodes[index];
     if (!node) return;
@@ -85,6 +91,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     addNode,
     undoLastNode,
     relink,
+    releaseUpTo,
     moveNode,
     setTheta,
   };
