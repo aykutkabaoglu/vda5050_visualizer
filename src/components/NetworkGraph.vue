@@ -56,8 +56,9 @@ const mode = useColorMode({
 // Create reactive configs based on dark mode and grid settings
 const config = computed(() => {
   const configs = createConfigs(mode.value === "dark", settingsStore.showGrid);
-  // Only the nodes of the order draft can be moved
-  configs.node.draggable = (node) => node.draft === true;
+  // Only the nodes of the order draft can be moved, except a locked
+  // stitching node
+  configs.node.draggable = (node) => node.draft === true && !node.locked;
   return configs;
 });
 
@@ -104,8 +105,9 @@ function suppressClicks() {
 const NODE_HIT_RADIUS_PX = 15;
 
 /**
- * Graph key of the received-order or robot node under a click. These nodes
- * are not interactive in v-network-graph, so their clicks arrive as view:click.
+ * Graph key of the received-order, robot or locked draft node under a click.
+ * These nodes are not interactive in v-network-graph, so their clicks arrive
+ * as view:click.
  */
 function nodeAt(event: MouseEvent): string | null {
   const rect = container.value?.getBoundingClientRect();
@@ -121,7 +123,9 @@ function nodeAt(event: MouseEvent): string | null {
 
   let nearest: string | null = null;
   let nearestDistance = radius;
-  const positions = totalLayouts.value.nodes as Record<
+  // Draft nodes are included for the locked stitching node, which is not
+  // interactive either
+  const positions = graphLayouts.value.nodes as Record<
     string,
     { x: number; y: number }
   >;

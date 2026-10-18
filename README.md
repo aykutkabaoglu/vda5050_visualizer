@@ -164,6 +164,11 @@ While **Create Order** is open, the order being edited is drawn on the graph in 
 
 Outside draw mode, clicking a drawn node highlights it in the form.
 
+**New order and order update** (VDA5050 2.1.0, 6.6.2): **Create Order** opens as an update when the robot's state reports an active order (node states left or actions neither FINISHED nor FAILED), otherwise as a new order; the two buttons at the top switch between them.
+
+- *New Order* starts empty with a new `orderId` and `orderUpdateId` 0. **Start from Last Node** adds the robot's `lastNodeId` at its current position as the first node, e.g. after a completed order.
+- *Update Order* keeps the `orderId` from the state and increments `orderUpdateId`. The first node is the stitching node: the decision point (last released node state) while base nodes are left, otherwise the last traversed node (`lastNodeId`, `lastNodeSequenceId`) at the robot's position. It cannot be edited, moved or deleted, because the robot keeps its contents. The current horizon follows, built from the state's node and edge states (node actions are not part of the state and have to be added again). Release horizon nodes with **Release up to here** to extend the base, change or extend the horizon, and publish.
+
 Nodes, edges and actions in the form can be collapsed with the arrow next to them; a collapsed card shows a one-line summary (ids, position, number of actions). Existing nodes, edges and actions start collapsed, new ones expanded. The node selected on the graph is expanded and the other nodes are collapsed. The two buttons next to **Add Node** and **Add Edge** expand or collapse all cards.
 
 **Base and horizon** (VDA5050 2.1.0, 6.6.1–6.6.2): each node in the form is marked *Base*, *Decision point* (the last base node) or *Horizon*. **Release up to here** releases the nodes and edges up to that node and makes the rest the horizon. In the preview the base is solid orange and the horizon light orange and dashed. A released edge with an unreleased node, or a released node after an unreleased edge, is marked as an error.

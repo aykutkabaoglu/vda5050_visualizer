@@ -57,6 +57,7 @@ export function useOrderDraftGraph() {
           : DRAFT_HORIZON_COLOR,
         zIndex: selected ? 60 : 50,
         draft: true,
+        locked: index < draft.lockedCount,
       };
     });
     return result;
@@ -106,7 +107,7 @@ export function useOrderDraftGraph() {
   /** Heading arrows of the draft nodes, in graph coordinates */
   const headings = computed(() =>
     (draft.chain?.nodes ?? []).flatMap((node, index) =>
-      node.nodePosition
+      node.nodePosition && index >= draft.lockedCount
         ? [
             {
               index,

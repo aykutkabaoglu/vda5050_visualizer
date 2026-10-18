@@ -23,6 +23,13 @@ import ActionEditor from "@/components/ActionEditor.vue";
 import FactsheetStatus from "@/components/FactsheetStatus.vue";
 import { useFactsheet } from "@/composables/useFactsheet";
 import { useOrderDraftStore } from "@/stores/orderDraft";
+import { useMqttStore } from "@/stores/mqtt";
+import {
+  buildOrderUpdate,
+  insertStartNode,
+  isOrderActive,
+  lastNodeAsStart,
+} from "@/utils/order-update";
 import {
   chainIssues,
   decisionPointIndex,
@@ -71,27 +78,85 @@ const orderForm = ref<{
   edges: [],
 });
 
-// Initialize form with existing order if provided
-if (props.existingOrder) {
+// New order or update of the robot's current order (VDA5050 2.1.0, 6.6.2)
+type OrderMode = "new" | "update";
+const mqttStore = useMqttStore();
+const robotState = computed(
+  () =>
+    mqttStore.agvDataMap.get(
+      `${props.agvId.manufacturer}/${props.agvId.serialNumber}`
+    )?.stateInfo ?? null
+);
+const orderActive = computed(() => isOrderActive(robotState.value));
+const canUpdate = computed(() => !!robotState.value?.orderId);
+const mode = ref<OrderMode>(orderActive.value ? "update" : "new");
+const stitching = ref<"decisionPoint" | "lastNode" | null>(null);
+const lastNodeStart = computed(() =>
+  robotState.value ? lastNodeAsStart(robotState.value) : null
+);
+
+const messageHeader = () => ({
+  headerId: (props.existingOrder?.headerId ?? 0) + 1,
+  manufacturer: props.agvId.manufacturer,
+  serialNumber: props.agvId.serialNumber,
+  timestamp: new Date().toISOString(),
+  version: robotState.value?.version || props.existingOrder?.version || "2.0.0",
+  zoneSetId: "",
+});
+
+const startNewOrder = () => {
   orderForm.value = {
-    headerId: (props.existingOrder.headerId || 0) + 1,
-    manufacturer: props.existingOrder.manufacturer || props.agvId.manufacturer,
-    serialNumber: props.existingOrder.serialNumber || props.agvId.serialNumber,
-    timestamp: new Date().toISOString(),
-    version: props.existingOrder.version,
-    orderId: props.existingOrder.orderId,
-    orderUpdateId: (props.existingOrder.orderUpdateId || 0) + 1,
-    zoneSetId: props.existingOrder.zoneSetId || "",
-    // Copies, so editing the form does not change the received order
-    nodes: JSON.parse(JSON.stringify(props.existingOrder.nodes || [])),
-    edges: JSON.parse(JSON.stringify(props.existingOrder.edges || [])),
+    ...messageHeader(),
+    orderId: `order_${Date.now()}`,
+    orderUpdateId: 0,
+    nodes: [],
+    edges: [],
   };
-}
+  stitching.value = null;
+};
+
+/** Starts an update with the stitching node and the robot's current horizon */
+const startOrderUpdate = () => {
+  const update = robotState.value ? buildOrderUpdate(robotState.value) : null;
+  if (!update) {
+    mode.value = "new";
+    return;
+  }
+  orderForm.value = {
+    ...messageHeader(),
+    orderId: update.orderId,
+    orderUpdateId: update.orderUpdateId,
+    nodes: update.nodes,
+    edges: update.edges,
+  };
+  stitching.value = update.stitching;
+};
+
+const startMode = (value: OrderMode) =>
+  value === "update" ? startOrderUpdate() : startNewOrder();
+startMode(mode.value);
+watch(mode, startMode);
+
+/** The stitching node of an update cannot be changed */
+const isLocked = (nodeIndex: number) =>
+  mode.value === "update" && nodeIndex === 0;
+
+const startFromLastNode = () => {
+  if (lastNodeStart.value) {
+    insertStartNode(orderForm.value, structuredClone(lastNodeStart.value));
+  }
+};
 
 // Share the draft with the graph for the preview and drawing on the map
 const draft = useOrderDraftStore();
 const draftForm = orderForm as unknown as Ref<OrderChain>;
-onMounted(() => draft.attach(draftForm, props.agvId));
+onMounted(() => {
+  draft.attach(draftForm, props.agvId);
+  draft.lockedCount = mode.value === "update" ? 1 : 0;
+});
+watch(mode, (value) => {
+  draft.lockedCount = value === "update" ? 1 : 0;
+});
 onBeforeUnmount(() => draft.detach(draftForm));
 
 const pathIssues = computed(() => chainIssues(orderForm.value));
@@ -377,6 +442,56 @@ const generateRandomOrderAndPublish = () => {
     <div class="space-y-4">
       <FactsheetStatus :factsheet="factsheet" />
 
+      <!-- New order / order update -->
+      <div class="border rounded-lg p-3 space-y-2 text-xs">
+        <div class="flex gap-2">
+          <Button
+            size="sm"
+            :variant="mode === 'new' ? 'default' : 'outline'"
+            class="h-7 text-xs flex-1"
+            @click="mode = 'new'"
+          >
+            New Order
+          </Button>
+          <Button
+            size="sm"
+            :variant="mode === 'update' ? 'default' : 'outline'"
+            class="h-7 text-xs flex-1"
+            :disabled="!canUpdate"
+            :title="canUpdate ? '' : 'The robot reports no order to update'"
+            @click="mode = 'update'"
+          >
+            Update Order
+          </Button>
+        </div>
+        <p v-if="mode === 'update'" class="text-muted-foreground">
+          Update {{ orderForm.orderUpdateId }} of order
+          {{ orderForm.orderId }}
+          ({{ orderActive ? "active" : "completed" }}). It starts at the
+          {{
+            stitching === "decisionPoint"
+              ? "decision point"
+              : "last traversed node"
+          }}
+          {{ orderForm.nodes[0]?.nodeId }} ({{
+            orderForm.nodes[0]?.sequenceId
+          }}); the robot keeps that node's contents. The current horizon is
+          loaded without its actions and can be released or changed.
+        </p>
+        <div v-else-if="lastNodeStart" class="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            class="h-7 text-xs"
+            :title="`Add ${lastNodeStart.nodeId} at the robot's position as the first node`"
+            @click="startFromLastNode"
+          >
+            <Icon icon="material-symbols:start" class="w-3 h-3 mr-1" />
+            Start from Last Node ({{ lastNodeStart.nodeId }})
+          </Button>
+        </div>
+      </div>
+
       <!-- Basic Information -->
       <div class="border rounded-lg p-4 space-y-3">
         <div
@@ -526,7 +641,7 @@ const generateRandomOrderAndPublish = () => {
             size="sm"
             variant="outline"
             class="h-7 text-xs"
-            :disabled="orderForm.nodes.length === 0"
+            :disabled="orderForm.nodes.length <= draft.lockedCount"
             @click="draft.undoLastNode()"
           >
             <Icon icon="material-symbols:undo" class="w-3 h-3 mr-1" />
@@ -598,8 +713,10 @@ const generateRandomOrderAndPublish = () => {
                 "
               >
                 {{
-                  nodeIndex === decisionPoint &&
-                  nodeIndex < orderForm.nodes.length - 1
+                  isLocked(nodeIndex)
+                    ? "Stitching node"
+                    : nodeIndex === decisionPoint &&
+                      nodeIndex < orderForm.nodes.length - 1
                     ? "Decision point"
                     : node.released
                     ? "Base"
@@ -634,6 +751,8 @@ const generateRandomOrderAndPublish = () => {
                 size="sm"
                 variant="ghost"
                 class="h-6 w-6 p-0"
+                title="Remove node"
+                :disabled="isLocked(nodeIndex)"
                 @click="removeNode(nodeIndex)"
               >
                 <Icon icon="material-symbols:delete" class="w-3 h-3" />
@@ -643,12 +762,17 @@ const generateRandomOrderAndPublish = () => {
               <div class="grid grid-cols-2 gap-2">
                 <div>
                   <Label class="text-xs">Node ID</Label>
-                  <Input v-model="node.nodeId" class="h-7 text-xs" />
+                  <Input
+                    v-model="node.nodeId"
+                    :disabled="isLocked(nodeIndex)"
+                    class="h-7 text-xs"
+                  />
                 </div>
                 <div>
                   <Label class="text-xs">Sequence ID</Label>
                   <Input
                     v-model.number="node.sequenceId"
+                    :disabled="isLocked(nodeIndex)"
                     type="number"
                     class="h-7 text-xs"
                   />
@@ -658,6 +782,7 @@ const generateRandomOrderAndPublish = () => {
                 <input
                   type="checkbox"
                   v-model="node.released"
+                  :disabled="isLocked(nodeIndex)"
                   :id="'node-released-' + nodeIndex"
                   class="w-4 h-4"
                 />
@@ -686,6 +811,7 @@ const generateRandomOrderAndPublish = () => {
                   <Label class="text-xs">X</Label>
                   <Input
                     v-model.number="node.nodePosition.x"
+                    :disabled="isLocked(nodeIndex)"
                     type="number"
                     class="h-7 text-xs"
                   />
@@ -694,6 +820,7 @@ const generateRandomOrderAndPublish = () => {
                   <Label class="text-xs">Y</Label>
                   <Input
                     v-model.number="node.nodePosition.y"
+                    :disabled="isLocked(nodeIndex)"
                     type="number"
                     class="h-7 text-xs"
                   />
@@ -702,6 +829,7 @@ const generateRandomOrderAndPublish = () => {
                   <Label class="text-xs">Theta (rad)</Label>
                   <Input
                     :model-value="node.nodePosition.theta ?? ''"
+                    :disabled="isLocked(nodeIndex)"
                     type="number"
                     step="0.01"
                     placeholder="not set"
@@ -723,12 +851,14 @@ const generateRandomOrderAndPublish = () => {
                   <div class="flex gap-1">
                     <Input
                       v-model="node.nodePosition.mapId"
+                      :disabled="isLocked(nodeIndex)"
                       class="h-7 text-xs flex-1"
                     />
                     <Button
                       size="sm"
                       variant="ghost"
                       class="h-7 w-7 p-0"
+                      :disabled="isLocked(nodeIndex)"
                       @click="node.nodePosition = undefined"
                     >
                       <Icon icon="material-symbols:close" class="w-3 h-3" />
@@ -745,6 +875,7 @@ const generateRandomOrderAndPublish = () => {
                     size="sm"
                     variant="ghost"
                     class="h-6 text-xs"
+                    :disabled="isLocked(nodeIndex)"
                     @click="addActionToNode(nodeIndex)"
                   >
                     <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />

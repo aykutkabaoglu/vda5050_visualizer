@@ -23,6 +23,8 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
   const drawMode = ref(false);
   /** Node selected on the graph, highlighted in the form */
   const selectedIndex = ref<number | null>(null);
+  /** Leading nodes that must not change (the stitching node of an update) */
+  const lockedCount = ref(0);
 
   const chain = computed<OrderChain | null>(
     () => form.value?.ref.value ?? null
@@ -31,6 +33,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
   function attach(orderForm: Ref<OrderChain>, id: AgvId) {
     form.value = { ref: orderForm };
     agvId.value = id;
+    lockedCount.value = 0;
     drawMode.value = false;
     selectedIndex.value = null;
   }
@@ -50,7 +53,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
   }
 
   function undoLastNode() {
-    if (!chain.value) return;
+    if (!chain.value || chain.value.nodes.length <= lockedCount.value) return;
     removeLastNode(chain.value);
     selectedIndex.value = null;
   }
@@ -65,6 +68,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
   }
 
   function moveNode(index: number, x: number, y: number) {
+    if (index < lockedCount.value) return;
     const node = chain.value?.nodes[index];
     if (!node) return;
     const round = (value: number) => Math.round(value * 1000) / 1000;
@@ -76,6 +80,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
   }
 
   function setTheta(index: number, theta: number) {
+    if (index < lockedCount.value) return;
     const node = chain.value?.nodes[index];
     if (!node?.nodePosition) return;
     node.nodePosition = { ...node.nodePosition, theta };
@@ -85,6 +90,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     agvId,
     drawMode,
     selectedIndex,
+    lockedCount,
     chain,
     attach,
     detach,
