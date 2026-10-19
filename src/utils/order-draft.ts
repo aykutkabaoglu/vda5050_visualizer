@@ -234,16 +234,42 @@ export function decisionPointIndex(chain: OrderChain): number {
 }
 
 /**
- * Makes nodes 0..index and the edges between them the base and everything
- * after them the horizon.
+ * Sets each edge's released flag from its nodes: an edge is released exactly
+ * when its start and end node are (VDA5050 2.1.0, 6.6.1: an edge can be
+ * released only with both its nodes, and nothing released follows an
+ * unreleased edge). Edges whose nodes are not in the order are unreleased.
+ */
+export function syncEdgeReleased(chain: OrderChain) {
+  chain.edges.forEach((edge, index) => {
+    const endpoints = edgeEndpoints(chain, index);
+    edge.released = endpoints
+      ? chain.nodes[endpoints[0]].released && chain.nodes[endpoints[1]].released
+      : false;
+  });
+}
+
+/**
+ * Makes nodes 0..index the base and the nodes after them the horizon; the
+ * edges follow their nodes.
  */
 export function releaseUpTo(chain: OrderChain, index: number) {
   chain.nodes.forEach((node, i) => {
     node.released = i <= index;
   });
-  chain.edges.forEach((edge, i) => {
-    edge.released = i + 1 <= index;
-  });
+  syncEdgeReleased(chain);
+}
+
+/**
+ * Releases or unreleases a node while keeping the base a prefix of the
+ * order: releasing node i releases all nodes before it, unreleasing it moves
+ * it and all nodes after it to the horizon.
+ */
+export function setNodeReleased(
+  chain: OrderChain,
+  index: number,
+  released: boolean
+) {
+  releaseUpTo(chain, released ? index : index - 1);
 }
 
 /** Problems of the whole chain, for a summary next to the form */

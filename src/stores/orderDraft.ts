@@ -9,6 +9,7 @@ import {
   removeNodeAt,
   addManualEdge,
   releaseUpTo as releaseChainUpTo,
+  setNodeReleased as setChainNodeReleased,
   type NewNode,
   type OrderChain,
 } from "@/utils/order-draft";
@@ -81,6 +82,12 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     if (chain.value) relinkChain(chain.value);
   }
 
+  /** Releases a node and the nodes before it, or unreleases it and the rest */
+  function setNodeReleased(index: number, released: boolean) {
+    if (!chain.value || index < lockedCount.value) return;
+    setChainNodeReleased(chain.value, index, released);
+  }
+
   /** Nodes up to index become the base, the rest the horizon */
   function releaseUpTo(index: number) {
     if (chain.value) releaseChainUpTo(chain.value, index);
@@ -120,6 +127,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     addEdge,
     removeEdge,
     releaseUpTo,
+    setNodeReleased,
     moveNode,
     setTheta,
   };

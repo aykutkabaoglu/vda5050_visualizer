@@ -40,6 +40,7 @@ import {
   chainIssues,
   decisionPointIndex,
   defaultMapId,
+  syncEdgeReleased,
   type OrderChain,
 } from "@/utils/order-draft";
 
@@ -228,6 +229,20 @@ watch(mode, (value) => {
 onBeforeUnmount(() => draft.detach(draftForm));
 
 const pathIssues = computed(() => chainIssues(orderForm.value));
+
+// Edges are released with their nodes; re-derive when edges are re-pointed
+// or node flags change
+watch(
+  () =>
+    orderForm.value.edges
+      .map((edge) => `${edge.startNodeId}>${edge.endNodeId}:${edge.sequenceId}`)
+      .join("|") +
+    "#" +
+    orderForm.value.nodes
+      .map((node) => `${node.nodeId}:${node.sequenceId}:${node.released}`)
+      .join("|"),
+  () => syncEdgeReleased(orderForm.value)
+);
 
 // Expanded node and edge cards; new cards and the node selected on the
 // graph are expanded, the others show a one-line summary
@@ -829,6 +844,28 @@ const generateRandomOrderAndPublish = () => {
                 @click="draft.selectedIndex = nodeIndex"
                 >Node {{ nodeIndex + 1 }}</span
               >
+              <label
+                class="flex items-center gap-1 text-[10px] cursor-pointer"
+                :title="
+                  node.released
+                    ? 'Unrelease: this node and all nodes after it become the horizon'
+                    : 'Release: this node and all nodes before it become the base'
+                "
+              >
+                <input
+                  type="checkbox"
+                  class="w-3.5 h-3.5"
+                  :checked="node.released"
+                  :disabled="isLocked(nodeIndex)"
+                  @change="
+                    draft.setNodeReleased(
+                      nodeIndex,
+                      ($event.target as HTMLInputElement).checked
+                    )
+                  "
+                />
+                Released
+              </label>
               <span
                 class="text-[10px] px-1.5 rounded"
                 :class="
@@ -862,19 +899,6 @@ const generateRandomOrderAndPublish = () => {
               <Button
                 size="sm"
                 variant="ghost"
-                class="h-6 text-[10px] px-1.5"
-                title="Release the nodes up to this one (base); the nodes after it become the horizon"
-                @click="draft.releaseUpTo(nodeIndex)"
-              >
-                <Icon
-                  icon="material-symbols:flag-outline"
-                  class="w-3 h-3 mr-1"
-                />
-                Release up to here
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
                 class="h-6 w-6 p-0"
                 title="Remove node"
                 :disabled="isLocked(nodeIndex)"
@@ -902,20 +926,6 @@ const generateRandomOrderAndPublish = () => {
                     class="h-7 text-xs"
                   />
                 </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  v-model="node.released"
-                  :disabled="isLocked(nodeIndex)"
-                  :id="'node-released-' + nodeIndex"
-                  class="w-4 h-4"
-                />
-                <Label
-                  :for="'node-released-' + nodeIndex"
-                  class="text-xs cursor-pointer"
-                  >Released</Label
-                >
               </div>
               <div v-if="!node.nodePosition" class="pt-1">
                 <Button
@@ -1108,6 +1118,17 @@ const generateRandomOrderAndPublish = () => {
               </button>
               <span class="text-xs font-medium">Edge {{ edgeIndex + 1 }}</span>
               <span
+                class="text-[10px] px-1.5 rounded"
+                :class="
+                  edge.released
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-orange-200 text-orange-900'
+                "
+                title="An edge is released with its start and end node (VDA5050 2.1.0, 6.6.1)"
+              >
+                {{ edge.released ? "Base" : "Horizon" }}
+              </span>
+              <span
                 v-if="!isOpen(edge)"
                 class="text-[10px] text-muted-foreground truncate"
               >
@@ -1157,19 +1178,6 @@ const generateRandomOrderAndPublish = () => {
                     class="h-7 text-xs"
                   />
                 </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  v-model="edge.released"
-                  :id="'edge-released-' + edgeIndex"
-                  class="w-4 h-4"
-                />
-                <Label
-                  :for="'edge-released-' + edgeIndex"
-                  class="text-xs cursor-pointer"
-                  >Released</Label
-                >
               </div>
               <div class="space-y-2">
                 <div class="flex items-center justify-between">
