@@ -7,6 +7,7 @@ import {
   removeLastNode,
   relinkChain,
   removeNodeAt,
+  addManualEdge,
   releaseUpTo as releaseChainUpTo,
   type NewNode,
   type OrderChain,
@@ -66,6 +67,16 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     selectedIndex.value = null;
   }
 
+  /** Adds an edge by hand, e.g. for a branch */
+  function addEdge() {
+    if (chain.value) addManualEdge(chain.value);
+  }
+
+  /** Removes only this edge; the nodes stay */
+  function removeEdge(index: number) {
+    chain.value?.edges.splice(index, 1);
+  }
+
   function relink() {
     if (chain.value) relinkChain(chain.value);
   }
@@ -106,6 +117,8 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     undoLastNode,
     relink,
     removeNode,
+    addEdge,
+    removeEdge,
     releaseUpTo,
     moveNode,
     setTheta,

@@ -67,16 +67,83 @@ export function removeLastNode(chain: OrderChain) {
 }
 
 /**
- * Removes a node and one of its edges (the one leading to it, or the one
- * leaving it for the first node) and reconnects the chain.
+ * Removes a node. In a valid chain its edge is removed as well and the chain
+ * is reconnected. Otherwise (e.g. manually added branches) only the edges
+ * that start or end at the node are removed and nothing is renumbered.
  */
 export function removeNodeAt(chain: OrderChain, index: number) {
   if (index < 0 || index >= chain.nodes.length) return;
-  chain.nodes.splice(index, 1);
-  if (chain.edges.length > 0) {
-    chain.edges.splice(Math.max(index - 1, 0), 1);
+  if (chainIssues(chain).length === 0) {
+    chain.nodes.splice(index, 1);
+    if (chain.edges.length > 0) {
+      chain.edges.splice(Math.max(index - 1, 0), 1);
+    }
+    relinkChain(chain);
+    return;
   }
-  relinkChain(chain);
+  const [removed] = chain.nodes.splice(index, 1);
+  const stillUsed = chain.nodes.some((node) => node.nodeId === removed.nodeId);
+  if (!stillUsed) {
+    chain.edges = chain.edges.filter(
+      (edge) =>
+        edge.startNodeId !== removed.nodeId && edge.endNodeId !== removed.nodeId
+    );
+  }
+}
+
+/**
+ * Adds an edge by hand, e.g. for a branch. It starts at the last node; the
+ * end node is chosen in the form. Its sequenceId follows the highest one in
+ * the order.
+ */
+export function addManualEdge(chain: OrderChain): Edge {
+  const highest = Math.max(
+    -1,
+    ...chain.nodes.map((node) => node.sequenceId),
+    ...chain.edges.map((edge) => edge.sequenceId)
+  );
+  const edge: Edge = {
+    edgeId: uniqueId("edge", new Set(chain.edges.map((e) => e.edgeId))),
+    sequenceId: highest + 1,
+    startNodeId: chain.nodes[chain.nodes.length - 1]?.nodeId ?? "",
+    endNodeId: "",
+    released: true,
+    actions: [],
+  };
+  chain.edges.push(edge);
+  return edge;
+}
+
+/**
+ * Indices of the nodes edge i connects. In a chain these are i and i + 1;
+ * otherwise the nodes are found by id (preferring the ones whose sequenceId
+ * is next to the edge's). Null when a node id is not in the order.
+ */
+export function edgeEndpoints(
+  chain: OrderChain,
+  index: number
+): [number, number] | null {
+  const edge = chain.edges[index];
+  if (!edge) return null;
+  if (
+    chain.nodes[index]?.nodeId === edge.startNodeId &&
+    chain.nodes[index + 1]?.nodeId === edge.endNodeId
+  ) {
+    return [index, index + 1];
+  }
+  const find = (nodeId: string, sequenceId: number, exclude = -1) => {
+    const matches = chain.nodes
+      .map((node, i) => ({ node, i }))
+      .filter(({ node, i }) => node.nodeId === nodeId && i !== exclude);
+    return (
+      matches.find(({ node }) => node.sequenceId === sequenceId)?.i ??
+      matches[0]?.i ??
+      -1
+    );
+  };
+  const start = find(edge.startNodeId, edge.sequenceId - 1);
+  const end = find(edge.endNodeId, edge.sequenceId + 1, start);
+  return start >= 0 && end >= 0 ? [start, end] : null;
 }
 
 /**

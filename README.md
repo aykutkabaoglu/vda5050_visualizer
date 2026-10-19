@@ -162,7 +162,7 @@ While **Create Order** is open, the order being edited is drawn on the graph in 
 - Drag drawn nodes to move them. Drag the handle at the end of a node's arrow to set `theta`; hold Shift to snap to 15°. A dashed arrow means `theta` is not set.
 - **Undo Node** removes the last node and its edge. **Link Nodes** renumbers the sequence ids and connects consecutive nodes after manual edits in the form.
 
-In the form, edges follow the nodes as well: **Add Node** adds a node (without position) and the edge to it, and removing a node removes its edge and connects its neighbours, so an order always has one edge less than nodes. **Add Position** uses the same default `mapId` as drawn nodes.
+In the form, **Add Node** adds a node (without position) and the edge from the previous node, and removing a node removes its edge and connects its neighbours, so a sequence stays valid. **Add Edge** adds further edges by hand, e.g. to build branches; the start and end node fields suggest the order's node ids, and the preview draws each edge between the nodes it names. A VDA5050 order is a single sequence (edge i joins node i and i + 1), so orders with other edges are not valid; the form lists such problems and **Link Nodes** turns the order back into a sequence. In an order with manual edges, removing a node only removes the edges at that node. **Add Position** uses the same default `mapId` as drawn nodes.
 
 Outside draw mode, clicking a drawn node highlights it in the form.
 

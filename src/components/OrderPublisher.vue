@@ -340,6 +340,22 @@ const removeNode = (index: number) => {
   draft.removeNode(index);
 };
 
+const addEdge = () => {
+  draft.addEdge();
+  const edges = orderForm.value.edges;
+  openItems.add(edges[edges.length - 1]);
+  expandedSections.value.add("order-edges");
+};
+
+const removeEdge = (index: number) => {
+  draft.removeEdge(index);
+};
+
+/** Node ids offered for the start and end of edges */
+const nodeIds = computed(() => [
+  ...new Set(orderForm.value.nodes.map((node) => node.nodeId)),
+]);
+
 const addActionToNode = (nodeIndex: number) => {
   if (!orderForm.value.nodes[nodeIndex].actions) {
     orderForm.value.nodes[nodeIndex].actions = [];
@@ -777,7 +793,8 @@ const generateRandomOrderAndPublish = () => {
         >
           <div v-for="issue in pathIssues" :key="issue">{{ issue }}</div>
           <div class="text-muted-foreground">
-            Link Nodes fixes the edges and sequence ids.
+            A VDA5050 order is a sequence (edge i joins node i and i + 1). Link
+            Nodes turns the order into one, replacing manual edges.
           </div>
         </div>
         <div v-if="expandedSections.has('order-nodes')" class="space-y-3 pt-2">
@@ -1047,11 +1064,26 @@ const generateRandomOrderAndPublish = () => {
           >
             <Icon icon="material-symbols:unfold-less" class="w-4 h-4" />
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            class="h-7 text-xs"
+            title="Add an edge by hand, e.g. for a branch"
+            @click="addEdge"
+          >
+            <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
+            Add Edge
+          </Button>
         </div>
         <div v-if="expandedSections.has('order-edges')" class="space-y-3 pt-2">
+          <datalist id="order-node-ids">
+            <option v-for="nodeId in nodeIds" :key="nodeId" :value="nodeId" />
+          </datalist>
           <p class="text-xs text-muted-foreground">
-            Edges follow the nodes: adding or removing a node adds or removes
-            the edge to it. Each edge joins two consecutive nodes.
+            Adding or removing a node adds or removes the edge to it. Add Edge
+            adds further edges by hand, e.g. branches; a VDA5050 order is a
+            single sequence, so only edges that join consecutive nodes are valid
+            (problems are listed in the Nodes section).
           </p>
           <div
             v-for="(edge, edgeIndex) in orderForm.edges"
@@ -1083,6 +1115,15 @@ const generateRandomOrderAndPublish = () => {
                 {{ edge.endNodeId }} · {{ edge.actions?.length || 0 }} actions
               </span>
               <div class="flex-1" />
+              <Button
+                size="sm"
+                variant="ghost"
+                class="h-6 w-6 p-0"
+                title="Remove edge"
+                @click="removeEdge(edgeIndex)"
+              >
+                <Icon icon="material-symbols:delete" class="w-3 h-3" />
+              </Button>
             </div>
             <div v-if="isOpen(edge)" class="space-y-2">
               <div class="grid grid-cols-2 gap-2">
@@ -1102,11 +1143,19 @@ const generateRandomOrderAndPublish = () => {
               <div class="grid grid-cols-2 gap-2">
                 <div>
                   <Label class="text-xs">Start Node ID</Label>
-                  <Input v-model="edge.startNodeId" class="h-7 text-xs" />
+                  <Input
+                    v-model="edge.startNodeId"
+                    list="order-node-ids"
+                    class="h-7 text-xs"
+                  />
                 </div>
                 <div>
                   <Label class="text-xs">End Node ID</Label>
-                  <Input v-model="edge.endNodeId" class="h-7 text-xs" />
+                  <Input
+                    v-model="edge.endNodeId"
+                    list="order-node-ids"
+                    class="h-7 text-xs"
+                  />
                 </div>
               </div>
               <div class="flex items-center gap-2">

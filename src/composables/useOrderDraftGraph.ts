@@ -5,6 +5,7 @@ import { useMqttStore } from "@/stores/mqtt";
 import {
   decisionPointIndex,
   defaultMapId as defaultMapIdOf,
+  edgeEndpoints,
   edgeIssues,
   type NewNode,
 } from "@/utils/order-draft";
@@ -80,14 +81,21 @@ export function useOrderDraftGraph() {
     const result: Edges = {};
     const chain = draft.chain;
     chain?.edges.forEach((edge, index) => {
-      const start = chain.nodes[index];
-      const end = chain.nodes[index + 1];
-      if (!start?.nodePosition || !end?.nodePosition) return;
+      // Drawn between the nodes the edge names, so manual branches show up
+      const endpoints = edgeEndpoints(chain, index);
+      if (!endpoints) return;
+      const [startIndex, endIndex] = endpoints;
+      if (
+        !chain.nodes[startIndex].nodePosition ||
+        !chain.nodes[endIndex].nodePosition
+      ) {
+        return;
+      }
       const issues = edgeIssues(chain, index);
       // Edges are drawn from end to start so the arrow marker sits at the end
       result[`${DRAFT_EDGE_PREFIX}${index}`] = {
-        source: draftNodeKey(index + 1),
-        target: draftNodeKey(index),
+        source: draftNodeKey(endIndex),
+        target: draftNodeKey(startIndex),
         color:
           issues.length > 0
             ? DRAFT_ERROR_COLOR
