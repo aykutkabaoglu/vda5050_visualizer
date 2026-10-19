@@ -91,6 +91,7 @@ const orderActive = computed(() => isOrderActive(robotState.value));
 const canUpdate = computed(() => !!robotState.value?.orderId);
 const mode = ref<OrderMode>(orderActive.value ? "update" : "new");
 const stitching = ref<"decisionPoint" | "lastNode" | null>(null);
+const contentsMissing = ref(false);
 const lastNodeStart = computed(() =>
   robotState.value ? lastNodeAsStart(robotState.value) : null
 );
@@ -113,11 +114,14 @@ const startNewOrder = () => {
     edges: [],
   };
   stitching.value = null;
+  contentsMissing.value = false;
 };
 
 /** Starts an update with the stitching node and the robot's current horizon */
 const startOrderUpdate = () => {
-  const update = robotState.value ? buildOrderUpdate(robotState.value) : null;
+  const update = robotState.value
+    ? buildOrderUpdate(robotState.value, props.existingOrder)
+    : null;
   if (!update) {
     mode.value = "new";
     return;
@@ -130,6 +134,7 @@ const startOrderUpdate = () => {
     edges: update.edges,
   };
   stitching.value = update.stitching;
+  contentsMissing.value = update.contentsMissing;
 };
 
 const startMode = (value: OrderMode) =>
@@ -475,8 +480,13 @@ const generateRandomOrderAndPublish = () => {
           }}
           {{ orderForm.nodes[0]?.nodeId }} ({{
             orderForm.nodes[0]?.sequenceId
-          }}); the robot keeps that node's contents. The current horizon is
-          loaded without its actions and can be released or changed.
+          }}); the robot keeps that node's contents. The current horizon can be
+          released or changed.
+        </p>
+        <p v-if="mode === 'update' && contentsMissing" class="text-amber-600">
+          No order message of this order was seen, so the horizon is loaded
+          without its actions and edge settings; add them again before
+          publishing.
         </p>
         <div v-else-if="lastNodeStart" class="flex items-center gap-2">
           <Button

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@iconify/vue";
 import OrderPublisher from "@/components/OrderPublisher.vue";
 import InstantActionPublisher from "@/components/InstantActionPublisher.vue";
+import HorizonRelease from "@/components/HorizonRelease.vue";
 import { instantActionsOf } from "@/utils/instant-actions";
 
 const emit = defineEmits<{
@@ -204,6 +205,12 @@ watch(selectedAgv, () => {
 
       <!-- View Mode -->
       <div v-else-if="selectedAgvData" class="space-y-4">
+        <HorizonRelease
+          v-if="selectedAgv"
+          :agv-id="selectedAgv"
+          :interface-name="interfaceName"
+        />
+
         <!-- State Message Section -->
         <div v-if="stateInfo" class="space-y-2">
           <div class="text-sm font-semibold flex items-center gap-2">
