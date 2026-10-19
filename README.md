@@ -157,10 +157,12 @@ While **Create Order** is open, the order being edited is drawn on the graph in 
 
 **Draw on Map** turns the graph into a drawing surface:
 
-- Click the map to add a node at that position (metres, map frame). Each new node is connected to the previous one by an edge, with sequence ids 0, 2, 4, … for nodes and 1, 3, 5, … for edges. New nodes take the `mapId` of the previous node, or the robot's `agvPosition.mapId`.
+- Click the map to add a node at that position (metres, map frame). Each new node is connected to the previous one by an edge, with sequence ids 0, 2, 4, … for nodes and 1, 3, 5, … for edges. New nodes take the robot's `agvPosition.mapId` from the state, or the `mapId` of the previous node when the state reports none.
 - Click a robot to add a node at its current pose (with its `lastNodeId` as node id when known), or a node of a received order or of the draft to add it again with the same node id, e.g. for loops.
 - Drag drawn nodes to move them. Drag the handle at the end of a node's arrow to set `theta`; hold Shift to snap to 15°. A dashed arrow means `theta` is not set.
 - **Undo Node** removes the last node and its edge. **Link Nodes** renumbers the sequence ids and connects consecutive nodes after manual edits in the form.
+
+In the form, edges follow the nodes as well: **Add Node** adds a node (without position) and the edge to it, and removing a node removes its edge and connects its neighbours, so an order always has one edge less than nodes. **Add Position** uses the same default `mapId` as drawn nodes.
 
 Outside draw mode, clicking a drawn node highlights it in the form.
 
@@ -171,7 +173,7 @@ Outside draw mode, clicking a drawn node highlights it in the form.
 
 **Release Horizon**: while the robot reports horizon nodes, the AGV details panel lists them. Select the last node to release and press **Release**; an order update is published that releases it and all horizon nodes before it, with the rest kept as horizon (same contents rules as above).
 
-Nodes, edges and actions in the form can be collapsed with the arrow next to them; a collapsed card shows a one-line summary (ids, position, number of actions). Existing nodes, edges and actions start collapsed, new ones expanded. The node selected on the graph is expanded and the other nodes are collapsed. The two buttons next to **Add Node** and **Add Edge** expand or collapse all cards.
+Nodes, edges and actions in the form can be collapsed with the arrow next to them; a collapsed card shows a one-line summary (ids, position, number of actions). Existing nodes, edges and actions start collapsed, new ones expanded. The node selected on the graph is expanded and the other nodes are collapsed. The two buttons in the node and edge section headers expand or collapse all cards.
 
 **Base and horizon** (VDA5050 2.1.0, 6.6.1–6.6.2): each node in the form is marked *Base*, *Decision point* (the last base node) or *Horizon*. **Release up to here** releases the nodes and edges up to that node and makes the rest the horizon. In the preview the base is solid orange and the horizon light orange and dashed. A released edge with an unreleased node, or a released node after an unreleased edge, is marked as an error.
 

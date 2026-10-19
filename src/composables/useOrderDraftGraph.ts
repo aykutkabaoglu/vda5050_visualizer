@@ -4,6 +4,7 @@ import { useOrderDraftStore } from "@/stores/orderDraft";
 import { useMqttStore } from "@/stores/mqtt";
 import {
   decisionPointIndex,
+  defaultMapId as defaultMapIdOf,
   edgeIssues,
   type NewNode,
 } from "@/utils/order-draft";
@@ -126,14 +127,11 @@ export function useOrderDraftGraph() {
     return mqttStore.agvDataMap.get(`${id.manufacturer}/${id.serialNumber}`);
   }
 
-  /** mapId for a new node: the previous node's, else the AGV's current map */
+  /** mapId for a new node: the AGV's current map, else the previous node's */
   function defaultMapId(): string {
-    const nodes = draft.chain?.nodes ?? [];
-    const previous = nodes[nodes.length - 1];
-    return (
-      previous?.nodePosition?.mapId ??
-      draftAgvData()?.stateInfo?.agvPosition?.mapId ??
-      ""
+    return defaultMapIdOf(
+      draft.chain,
+      draftAgvData()?.stateInfo?.agvPosition?.mapId
     );
   }
 

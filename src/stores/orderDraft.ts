@@ -6,6 +6,7 @@ import {
   appendNode,
   removeLastNode,
   relinkChain,
+  removeNodeAt,
   releaseUpTo as releaseChainUpTo,
   type NewNode,
   type OrderChain,
@@ -58,6 +59,13 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     selectedIndex.value = null;
   }
 
+  /** Removes a node and its edge; the locked stitching node stays */
+  function removeNode(index: number) {
+    if (!chain.value || index < lockedCount.value) return;
+    removeNodeAt(chain.value, index);
+    selectedIndex.value = null;
+  }
+
   function relink() {
     if (chain.value) relinkChain(chain.value);
   }
@@ -97,6 +105,7 @@ export const useOrderDraftStore = defineStore("orderDraft", () => {
     addNode,
     undoLastNode,
     relink,
+    removeNode,
     releaseUpTo,
     moveNode,
     setTheta,

@@ -33,6 +33,7 @@ import {
 import {
   chainIssues,
   decisionPointIndex,
+  defaultMapId,
   type OrderChain,
 } from "@/utils/order-draft";
 
@@ -263,34 +264,18 @@ const publishOrder = () => {
 };
 
 // Helper functions for managing arrays
+/** mapId for a new node or position: the robot's map, else the previous node's */
+const newNodeMapId = () =>
+  defaultMapId(orderForm.value, robotState.value?.agvPosition?.mapId);
+
+// Nodes and edges form a chain (edge i joins node i and i + 1), so adding or
+// removing a node adds or removes its edge as well
 const addNode = () => {
-  orderForm.value.nodes.push({
-    nodeId: `node_${orderForm.value.nodes.length + 1}`,
-    sequenceId: orderForm.value.nodes.length + 1,
-    released: true,
-    actions: [],
-  });
-  openItems.add(orderForm.value.nodes[orderForm.value.nodes.length - 1]);
+  draft.addNode({ mapId: newNodeMapId() });
 };
 
 const removeNode = (index: number) => {
-  orderForm.value.nodes.splice(index, 1);
-};
-
-const addEdge = () => {
-  orderForm.value.edges.push({
-    edgeId: `edge_${orderForm.value.edges.length + 1}`,
-    startNodeId: "",
-    endNodeId: "",
-    sequenceId: orderForm.value.edges.length + 1,
-    released: true,
-    actions: [],
-  });
-  openItems.add(orderForm.value.edges[orderForm.value.edges.length - 1]);
-};
-
-const removeEdge = (index: number) => {
-  orderForm.value.edges.splice(index, 1);
+  draft.removeNode(index);
 };
 
 const addActionToNode = (nodeIndex: number) => {
@@ -807,7 +792,9 @@ const generateRandomOrderAndPublish = () => {
                   size="sm"
                   variant="outline"
                   class="h-6 text-xs"
-                  @click="node.nodePosition = { x: 0, y: 0, mapId: '' }"
+                  @click="
+                    node.nodePosition = { x: 0, y: 0, mapId: newNodeMapId() }
+                  "
                 >
                   <Icon
                     icon="material-symbols:add-location"
@@ -947,17 +934,12 @@ const generateRandomOrderAndPublish = () => {
           >
             <Icon icon="material-symbols:unfold-less" class="w-4 h-4" />
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            class="h-7 text-xs"
-            @click="addEdge"
-          >
-            <Icon icon="material-symbols:add" class="w-3 h-3 mr-1" />
-            Add Edge
-          </Button>
         </div>
         <div v-if="expandedSections.has('order-edges')" class="space-y-3 pt-2">
+          <p class="text-xs text-muted-foreground">
+            Edges follow the nodes: adding or removing a node adds or removes
+            the edge to it. Each edge joins two consecutive nodes.
+          </p>
           <div
             v-for="(edge, edgeIndex) in orderForm.edges"
             :key="edgeIndex"
@@ -988,14 +970,6 @@ const generateRandomOrderAndPublish = () => {
                 {{ edge.endNodeId }} · {{ edge.actions?.length || 0 }} actions
               </span>
               <div class="flex-1" />
-              <Button
-                size="sm"
-                variant="ghost"
-                class="h-6 w-6 p-0"
-                @click="removeEdge(edgeIndex)"
-              >
-                <Icon icon="material-symbols:delete" class="w-3 h-3" />
-              </Button>
             </div>
             <div v-if="isOpen(edge)" class="space-y-2">
               <div class="grid grid-cols-2 gap-2">

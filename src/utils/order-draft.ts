@@ -13,8 +13,9 @@ export interface OrderChain {
 export interface NewNode {
   /** Reuse this nodeId (e.g. an existing node); a new id is generated otherwise */
   nodeId?: string;
-  x: number;
-  y: number;
+  /** Without x and y the node has no position yet */
+  x?: number;
+  y?: number;
   theta?: number;
   mapId: string;
 }
@@ -30,22 +31,18 @@ export function appendNode(chain: OrderChain, newNode: NewNode): Node {
   const previous = chain.nodes[chain.nodes.length - 1];
   // A node after a horizon (unreleased) node is part of the horizon as well
   const released = previous ? previous.released : true;
-  const nodePosition: NonNullable<Node["nodePosition"]> = {
-    x: newNode.x,
-    y: newNode.y,
-    mapId: newNode.mapId,
-  };
-  if (newNode.theta !== undefined) nodePosition.theta = newNode.theta;
-
   const node: Node = {
     nodeId:
       newNode.nodeId ??
       uniqueId("node", new Set(chain.nodes.map((n) => n.nodeId))),
     sequenceId: previous ? previous.sequenceId + 2 : 0,
     released,
-    nodePosition,
     actions: [],
   };
+  if (newNode.x !== undefined && newNode.y !== undefined) {
+    node.nodePosition = { x: newNode.x, y: newNode.y, mapId: newNode.mapId };
+    if (newNode.theta !== undefined) node.nodePosition.theta = newNode.theta;
+  }
   chain.nodes.push(node);
 
   if (previous) {
@@ -67,6 +64,32 @@ export function removeLastNode(chain: OrderChain) {
   if (chain.edges.length > Math.max(chain.nodes.length - 1, 0)) {
     chain.edges.pop();
   }
+}
+
+/**
+ * Removes a node and one of its edges (the one leading to it, or the one
+ * leaving it for the first node) and reconnects the chain.
+ */
+export function removeNodeAt(chain: OrderChain, index: number) {
+  if (index < 0 || index >= chain.nodes.length) return;
+  chain.nodes.splice(index, 1);
+  if (chain.edges.length > 0) {
+    chain.edges.splice(Math.max(index - 1, 0), 1);
+  }
+  relinkChain(chain);
+}
+
+/**
+ * mapId for a new node: the map the robot reports in its state, else the
+ * previous node's map.
+ */
+export function defaultMapId(
+  chain: OrderChain | null | undefined,
+  stateMapId: string | null | undefined
+): string {
+  if (stateMapId) return stateMapId;
+  const nodes = chain?.nodes ?? [];
+  return nodes[nodes.length - 1]?.nodePosition?.mapId ?? "";
 }
 
 /**
