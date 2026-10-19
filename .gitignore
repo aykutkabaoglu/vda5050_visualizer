@@ -12,3 +12,7 @@ node_modules
 dist/
 .vercel
 dist_electron/
+
+# Orders saved from the order publisher
+saved-orders.json
+saved-orders.json.tmp

@@ -23,6 +23,12 @@ import ActionEditor from "@/components/ActionEditor.vue";
 import FactsheetStatus from "@/components/FactsheetStatus.vue";
 import { useFactsheet } from "@/composables/useFactsheet";
 import { useOrderDraftStore } from "@/stores/orderDraft";
+import {
+  fetchSavedOrders,
+  saveOrder as saveOrderFile,
+  savedOrderContents,
+  type SavedOrder,
+} from "@/utils/saved-orders";
 import { useMqttStore } from "@/stores/mqtt";
 import {
   buildOrderUpdate,
@@ -125,6 +131,7 @@ const startOrderUpdate = () => {
     : null;
   if (!update) {
     mode.value = "new";
+    startNewOrder();
     return;
   }
   orderForm.value = {
@@ -138,10 +145,65 @@ const startOrderUpdate = () => {
   contentsMissing.value = update.contentsMissing;
 };
 
-const startMode = (value: OrderMode) =>
-  value === "update" ? startOrderUpdate() : startNewOrder();
-startMode(mode.value);
-watch(mode, startMode);
+/** Switches between a new order and an update and starts the form over */
+const switchMode = (value: OrderMode) => {
+  mode.value = value;
+  if (value === "update") startOrderUpdate();
+  else startNewOrder();
+};
+switchMode(mode.value);
+
+// Saved orders (saved-orders.json in the package folder, via the dev server)
+const savedOrders = ref<SavedOrder[]>([]);
+const savedOrdersError = ref("");
+const saveName = ref("");
+const showSave = ref(false);
+const saveExists = computed(() =>
+  savedOrders.value.some((saved) => saved.name === saveName.value.trim())
+);
+
+const refreshSavedOrders = async () => {
+  try {
+    savedOrders.value = await fetchSavedOrders();
+    savedOrdersError.value = "";
+  } catch (err: any) {
+    savedOrdersError.value = err.message;
+  }
+};
+onMounted(refreshSavedOrders);
+
+const openSave = () => {
+  if (!saveName.value) saveName.value = orderForm.value.orderId;
+  showSave.value = true;
+};
+
+const saveCurrentOrder = async () => {
+  const name = saveName.value.trim();
+  if (!name) return;
+  try {
+    savedOrders.value = await saveOrderFile(name, props.agvId, orderForm.value);
+    savedOrdersError.value = "";
+    showSave.value = false;
+    toast({ title: "Order saved", description: `Saved as "${name}".` });
+  } catch (err: any) {
+    toast({
+      title: "Saving failed",
+      description: err.message,
+      variant: "destructive",
+    });
+  }
+};
+
+/** Loads a saved order into the form as a new order */
+const loadSavedOrder = (saved: SavedOrder) => {
+  switchMode("new");
+  const contents = savedOrderContents(saved);
+  orderForm.value.nodes = contents.nodes;
+  orderForm.value.edges = contents.edges;
+  orderForm.value.zoneSetId = contents.zoneSetId;
+  saveName.value = saved.name;
+  draft.selectedIndex = null;
+};
 
 /** The stitching node of an update cannot be changed */
 const isLocked = (nodeIndex: number) =>
@@ -439,7 +501,7 @@ const generateRandomOrderAndPublish = () => {
             size="sm"
             :variant="mode === 'new' ? 'default' : 'outline'"
             class="h-7 text-xs flex-1"
-            @click="mode = 'new'"
+            @click="switchMode('new')"
           >
             New Order
           </Button>
@@ -449,7 +511,7 @@ const generateRandomOrderAndPublish = () => {
             class="h-7 text-xs flex-1"
             :disabled="!canUpdate"
             :title="canUpdate ? '' : 'The robot reports no order to update'"
-            @click="mode = 'update'"
+            @click="switchMode('update')"
           >
             Update Order
           </Button>
@@ -485,6 +547,57 @@ const generateRandomOrderAndPublish = () => {
             Start from Last Node ({{ lastNodeStart.nodeId }})
           </Button>
         </div>
+      </div>
+
+      <!-- Saved orders -->
+      <div class="border rounded-lg p-3 space-y-2 text-xs">
+        <div
+          class="flex items-center justify-between cursor-pointer"
+          @click="toggleSection('order-saved')"
+        >
+          <h3 class="font-semibold text-sm">
+            Saved Orders ({{ savedOrders.length }})
+          </h3>
+          <Icon
+            :icon="
+              expandedSections.has('order-saved')
+                ? 'material-symbols:expand-less'
+                : 'material-symbols:expand-more'
+            "
+            class="w-4 h-4"
+          />
+        </div>
+        <template v-if="expandedSections.has('order-saved')">
+          <p v-if="savedOrdersError" class="text-amber-600">
+            {{ savedOrdersError }}
+          </p>
+          <p v-else-if="savedOrders.length === 0" class="text-muted-foreground">
+            No saved orders. Use Save next to Publish Order.
+          </p>
+          <div
+            v-for="saved in savedOrders"
+            :key="saved.name"
+            class="flex items-center gap-2 border rounded px-2 py-1"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="font-medium truncate">{{ saved.name }}</div>
+              <div class="text-[10px] text-muted-foreground truncate">
+                {{ saved.order.nodes.length }} nodes ·
+                {{ saved.serialNumber }} ·
+                {{ new Date(saved.savedAt).toLocaleString() }}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              class="h-6 text-xs shrink-0"
+              :title="`Load ${saved.name} into the form as a new order`"
+              @click="loadSavedOrder(saved)"
+            >
+              Load
+            </Button>
+          </div>
+        </template>
       </div>
 
       <!-- Basic Information -->
@@ -1043,10 +1156,40 @@ const generateRandomOrderAndPublish = () => {
       </div>
 
       <!-- Actions -->
+      <div v-if="showSave" class="flex gap-2 pt-2 border-t">
+        <Input
+          v-model="saveName"
+          placeholder="Name of the saved order"
+          class="h-8 text-xs flex-1"
+          @keyup.enter="saveCurrentOrder"
+        />
+        <Button
+          size="sm"
+          class="h-8 text-xs"
+          title="Save the order under this name"
+          :disabled="!saveName.trim()"
+          @click="saveCurrentOrder"
+        >
+          {{ saveExists ? "Overwrite" : "Save" }}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          class="h-8 w-8 p-0"
+          title="Cancel saving"
+          @click="showSave = false"
+        >
+          <Icon icon="material-symbols:close" class="w-4 h-4" />
+        </Button>
+      </div>
       <div class="flex gap-2 pt-2 border-t">
         <Button @click="publishOrder" class="flex-1">
           <Icon icon="material-symbols:send" class="w-4 h-4 mr-2" />
           Publish Order
+        </Button>
+        <Button variant="outline" @click="openSave">
+          <Icon icon="material-symbols:save-outline" class="w-4 h-4 mr-2" />
+          Save
         </Button>
         <Button variant="outline" @click="emit('close')"> Cancel </Button>
       </div>

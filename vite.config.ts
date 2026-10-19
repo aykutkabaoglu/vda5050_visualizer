@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import inject from "@rollup/plugin-inject";
 import commonjs from "@rollup/plugin-commonjs";
+import { savedOrdersPlugin } from "./server/saved-orders";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -13,6 +14,8 @@ export default defineConfig(({ mode }) => {
     base: "./",
     plugins: [
       vue(),
+      // Saved orders in saved-orders.json next to package.json
+      savedOrdersPlugin(fileURLToPath(new URL(".", import.meta.url))),
       isDevelopment && commonjs(),
       isDevelopment &&
         inject({ Buffer: ["buffer", "Buffer"], process: "process" }),
