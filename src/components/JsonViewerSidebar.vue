@@ -88,6 +88,17 @@ const clearSearch = () => {
   searchQuery.value = "";
 };
 
+// Sections (objects and arrays) can be collapsed one by one with their arrow;
+// the viewer keeps that state per path while new messages arrive. Expand all
+// and Collapse all re-create the tree with a new depth.
+const EXPANDED_DEPTH = 10;
+const depth = ref(EXPANDED_DEPTH);
+const treeKey = ref(0);
+const setDepth = (value: number) => {
+  depth.value = value;
+  treeKey.value++;
+};
+
 // Copy JSON to clipboard
 const copyJsonToClipboard = async () => {
   const data = reactiveData.value;
@@ -119,6 +130,26 @@ const copyJsonToClipboard = async () => {
     >
       <span class="truncate">{{ title || "JSON Viewer" }}</span>
       <div class="flex items-center gap-2">
+        <Button
+          v-if="reactiveData"
+          variant="outline"
+          size="sm"
+          class="h-8 w-8 p-0"
+          title="Expand all"
+          @click="setDepth(EXPANDED_DEPTH)"
+        >
+          <Icon icon="material-symbols:unfold-more" class="w-4 h-4" />
+        </Button>
+        <Button
+          v-if="reactiveData"
+          variant="outline"
+          size="sm"
+          class="h-8 w-8 p-0"
+          title="Collapse all (top-level keys stay visible)"
+          @click="setDepth(1)"
+        >
+          <Icon icon="material-symbols:unfold-less" class="w-4 h-4" />
+        </Button>
         <Button
           v-if="reactiveData"
           variant="outline"
@@ -165,7 +196,13 @@ const copyJsonToClipboard = async () => {
         </div>
         <!-- JSON Display -->
         <div class="border rounded-md p-3 bg-muted/50">
-          <vue-json-pretty :data="filteredData" :deep="10" />
+          <vue-json-pretty
+            :key="treeKey"
+            :data="filteredData"
+            :deep="depth"
+            :show-icon="true"
+            :show-length="true"
+          />
         </div>
       </div>
     </div>
