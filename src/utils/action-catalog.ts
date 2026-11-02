@@ -243,22 +243,27 @@ export function formatParameterValue(value: unknown): string {
 }
 
 /**
- * Prepares an action for a newly selected action type: adds the required
- * parameters that are missing and picks an allowed blocking type.
- * Existing parameters (also free-form ones) are kept.
+ * Prepares an action for a newly selected action type. The parameters are
+ * rebuilt from the type's factsheet definition: its required parameters
+ * (keeping the value of a parameter with the same key) and the optional ones
+ * that are already set. Parameters the new type does not define, such as
+ * those of the previous type, are removed. The blocking type is changed to an
+ * allowed one if needed.
  */
 export function applyCatalogAction(
   action: Action,
   catalogAction: CatalogAction
 ) {
-  const parameters: ActionParameter[] = action.actionParameters ?? [];
-  catalogAction.parameters
-    .filter((param) => !param.isOptional)
-    .forEach((param) => {
-      if (!parameters.some((existing) => existing.key === param.key)) {
-        parameters.push({ key: param.key, value: "" });
-      }
-    });
+  const existing = action.actionParameters ?? [];
+  const parameters: ActionParameter[] = [];
+  catalogAction.parameters.forEach((param) => {
+    const current = existing.find((candidate) => candidate.key === param.key);
+    if (current) {
+      parameters.push(current);
+    } else if (!param.isOptional) {
+      parameters.push({ key: param.key, value: "" });
+    }
+  });
   action.actionParameters = parameters;
 
   const allowed = catalogAction.blockingTypes;

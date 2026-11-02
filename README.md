@@ -147,9 +147,37 @@ Each map can carry a VDA5050 `mapId`. In **Auto** mode the visualizer shows the 
 
 ### Factsheet Actions
 
-The order and instant action editors take their action types from the AGV factsheet (`protocolFeatures.agvActions`). Instant actions list the actions with the `INSTANT` scope, node and edge actions the ones with the `NODE` and `EDGE` scope. Selecting an action adds its required parameters and limits the blocking type to the allowed ones. Parameter values are converted by `valueDataType` (e.g. `FLOAT` → number, `OBJECT` → JSON object) and invalid values are marked. Optional parameters can be added with one click, and custom action types and free-form parameters are still possible.
+The order and instant action editors take their action types from the AGV factsheet (`protocolFeatures.agvActions`). Instant actions list the actions with the `INSTANT` scope, node and edge actions the ones with the `NODE` and `EDGE` scope. Selecting an action sets its parameters from the factsheet: its required parameters are added (a value already entered for the same key is kept), optional ones that are set stay, and parameters the action does not define, e.g. those of the previously selected action, are removed. The blocking type is limited to the allowed ones. Parameter values are converted by `valueDataType` (e.g. `FLOAT` → number, `OBJECT` → JSON object) and invalid values are marked. Optional parameters can be added with one click, and custom action types and free-form parameters are still possible.
 
 **Load Factsheet** subscribes to the factsheet topic again, so the broker sends the retained factsheet (VDA5050 2.1.0, 6.15). If none arrives within 2 s, it sends a `factsheetRequest` instant action and waits 5 s. Without a factsheet the editors offer the standard VDA5050 actions. A factsheet that arrives wrapped as `{"data": "<json>"}` (e.g. a string message forwarded by a bridge) is accepted and marked in the editor.
+
+### Drawing Orders
+
+While **Create Order** is open, the order being edited is drawn on the graph in orange, next to the robots and their received orders. Edges that do not connect consecutive nodes with matching sequence ids are drawn in red, and the form lists the problems.
+
+**Draw on Map** turns the graph into a drawing surface:
+
+- Click the map to add a node at that position (metres, map frame). Each new node is connected to the previous one by an edge, with sequence ids 0, 2, 4, … for nodes and 1, 3, 5, … for edges. New nodes take the robot's `agvPosition.mapId` from the state, or the `mapId` of the previous node when the state reports none.
+- Click a robot to add a node at its current pose (with its `lastNodeId` as node id when known), or a node of a received order or of the draft to add it again with the same node id, e.g. for loops.
+- Drag drawn nodes to move them. Drag the handle at the end of a node's arrow to set `theta`; hold Shift to snap to 15°. A dashed arrow means `theta` is not set.
+- **Undo Node** removes the last node and its edge. **Link Nodes** renumbers the sequence ids and connects consecutive nodes after manual edits in the form.
+
+In the form, **Add Node** adds a node (without position) and the edge from the previous node, and removing a node removes its edge and connects its neighbours, so a sequence stays valid. **Add Edge** adds further edges by hand, e.g. to build branches; the start and end node fields suggest the order's node ids, and the preview draws each edge between the nodes it names. A VDA5050 order is a single sequence (edge i joins node i and i + 1), so orders with other edges are not valid; the form lists such problems and **Link Nodes** turns the order back into a sequence. In an order with manual edges, removing a node only removes the edges at that node. **Add Position** uses the same default `mapId` as drawn nodes.
+
+Outside draw mode, clicking a drawn node highlights it in the form.
+
+**New order and order update** (VDA5050 2.1.0, 6.6.2): **Create Order** opens as an update when the robot's state reports an active order (node states left or actions neither FINISHED nor FAILED), otherwise as a new order; the two buttons at the top switch between them.
+
+- *New Order* starts empty with a new `orderId` and `orderUpdateId` 0. **Start from Last Node** adds the robot's `lastNodeId` at its current position as the first node, e.g. after a completed order.
+- *Update Order* keeps the `orderId` from the state and increments `orderUpdateId`. The first node is the stitching node: the decision point (last released node state) while base nodes are left, otherwise the last traversed node (`lastNodeId`, `lastNodeSequenceId`) at the robot's position. It cannot be edited, moved or deleted, because the robot keeps its contents. The current horizon follows, built from the state's node and edge states. Node actions, node descriptions and edge settings are not part of the state; they are copied from the last order message of the same `orderId` seen on the order topic (matched by `nodeId`/`edgeId` and `sequenceId`). If the visualizer has not seen that message, e.g. because it connected later, the form says so and they have to be added again. Release horizon nodes with their **Released** checkbox to extend the base, change or extend the horizon, and publish.
+
+**Release Horizon**: while the robot reports horizon nodes, the AGV details panel lists them. Select the last node to release and press **Release**; an order update is published that releases it and all horizon nodes before it, with the rest kept as horizon (same contents rules as above).
+
+**Saved orders**: **Save** next to **Publish Order** stores the order (nodes, edges, actions, `orderId`, `version`, `zoneSetId`) under a name; saving with an existing name overwrites it. The **Saved Orders** section of the form lists them, and **Load** puts a saved order into the form as a new order with a new `orderId`, ready to edit, draw on or publish. The orders are kept in `saved-orders.json` in this package folder (ignored by git). The browser cannot write files itself, so the file is read and written by the Vite dev or preview server (`npm run dev` or `npm run preview`); the built app and the Electron app have no saved orders.
+
+Nodes, edges and actions in the form can be collapsed with the arrow next to them; a collapsed card shows a one-line summary (ids, position, number of actions). Existing nodes, edges and actions start collapsed, new ones expanded. The node selected on the graph is expanded and the other nodes are collapsed. The two buttons in the node and edge section headers expand or collapse all cards.
+
+**Base and horizon** (VDA5050 2.1.0, 6.6.1–6.6.2): each node in the form is marked *Base*, *Decision point* (the last base node) or *Horizon*, and has a **Released** checkbox next to its name, visible also when the node is collapsed. The base is always the first part of the order: releasing a node releases all nodes before it, unreleasing a node moves it and all nodes after it to the horizon. Edges have no checkbox: an edge can be released only with both its nodes and nothing released may follow an unreleased edge, so an edge is released exactly when its start and end node are, and its *Base*/*Horizon* badge shows the result. In the preview the base is solid orange and the horizon light orange and dashed. A released edge with an unreleased node, or a released node after an unreleased edge (e.g. in a loaded order), is marked as an error.
 
 ### Updates
 
