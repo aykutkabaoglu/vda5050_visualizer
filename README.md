@@ -133,7 +133,7 @@ The purpose of this package is to view and visualize vda5050 messages more quick
 ![Desktop Interface](docs/2.png)
 
 - Display all robots on the one graph
-- Displaying the real-time position of multiple robots
+- Displaying the real-time position of multiple robots, with an arrow showing each robot's orientation (`agvPosition.theta` from the state or visualization message)
 - Displaying the vda5050 actions that robots perform
 - Displaying data from the master controller to the robot and from the robot to the master controller
 - Display of raw json data; every object and array can be collapsed with its arrow (the collapsed sections stay collapsed while new messages arrive), and the viewer header has Expand all / Collapse all

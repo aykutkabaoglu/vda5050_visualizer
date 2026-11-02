@@ -22,6 +22,8 @@ export class VDA5050Agv implements IVDA5050Agv {
   public readonly layouts = ref<Layouts>({ nodes: {} });
   public readonly color: string;
   public colors: ColorSchema;
+  /** Last agvPosition.theta, kept when an order resets the graph */
+  private robotTheta: number | undefined;
   public mqttTopic: string;
   private mqttClient: mqtt.MqttClient | null = null;
 
@@ -250,17 +252,28 @@ export class VDA5050Agv implements IVDA5050Agv {
     }
   }
 
-  private updateAgvPosition(position: { x: number; y: number }): void {
+  private updateAgvPosition(position: {
+    x: number;
+    y: number;
+    theta?: number;
+  }): void {
     const robotNodeId = `robot_${this.agvId.serialNumber}`;
+    // agvPosition.theta, drawn as the robot's heading arrow
+    if (typeof position.theta === "number") {
+      this.robotTheta = position.theta;
+    }
 
-    // Ensure robot node exists in nodes (for graph to render it)
-    if (!this.nodes.value[robotNodeId]) {
+    // Ensure robot node exists in nodes (for graph to render it) and carries
+    // the current theta
+    const robotNode = this.nodes.value[robotNodeId];
+    if (!robotNode || robotNode.theta !== this.robotTheta) {
       this.nodes.value = {
         ...this.nodes.value,
         [robotNodeId]: {
           name: this.agvId.serialNumber,
           color: "#000",
           zIndex: 100,
+          theta: this.robotTheta,
         },
       };
     }
@@ -335,6 +348,7 @@ export class VDA5050Agv implements IVDA5050Agv {
       name: this.agvId.serialNumber,
       color: "#000",
       zIndex: 100,
+      theta: this.robotTheta,
     };
   }
 
