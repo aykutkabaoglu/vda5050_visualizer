@@ -20,7 +20,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ConnectionModal from "@/components/ConnectionModal.vue";
 import SimulatorModal from "@/components/SimulatorModal.vue";
+import MapManagerModal from "@/components/MapManagerModal.vue";
 import { useSettingsStore } from "@/stores/settings";
+import { useMapsStore } from "@/stores/maps";
 
 const props = defineProps<{
   showLeftSidebar?: boolean;
@@ -47,9 +49,11 @@ const mode = useColorMode({
 });
 
 const settingsStore = useSettingsStore();
+const mapsStore = useMapsStore();
 
 const isConnectionModalOpen = ref(false);
 const isSimulatorModalOpen = ref(false);
+const isMapModalOpen = ref(false);
 
 const openGitHub = () => {
   window.open("https://github.com/bekirbostanci/vda5050_visualizer", "_blank");
@@ -77,6 +81,13 @@ const openGitHub = () => {
         >
       </MenubarMenu>
       <MenubarMenu>
+        <MenubarTrigger
+          class="font-normal text-sm px-2 md:px-3"
+          @click="isMapModalOpen = true"
+          >Maps</MenubarTrigger
+        >
+      </MenubarMenu>
+      <MenubarMenu>
         <MenubarTrigger class="font-normal text-sm px-2 md:px-3"
           >View</MenubarTrigger
         >
@@ -86,6 +97,12 @@ const openGitHub = () => {
             @update:checked="(checked) => settingsStore.setShowGrid(checked)"
           >
             Show Grid
+          </MenubarCheckboxItem>
+          <MenubarCheckboxItem
+            :checked="mapsStore.showMaps"
+            @update:checked="(checked) => (mapsStore.showMaps = checked)"
+          >
+            Show Map
           </MenubarCheckboxItem>
         </MenubarContent>
       </MenubarMenu>
@@ -235,6 +252,7 @@ const openGitHub = () => {
 
     <ConnectionModal v-model:open="isConnectionModalOpen" />
     <SimulatorModal v-model:open="isSimulatorModalOpen" />
+    <MapManagerModal v-model:open="isMapModalOpen" />
   </div>
 </template>
 

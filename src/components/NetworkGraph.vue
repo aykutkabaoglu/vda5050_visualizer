@@ -4,6 +4,8 @@ import { useVDA5050 } from "@/composables/useVDA5050";
 import { useColorMode } from "@vueuse/core";
 import { createConfigs } from "@/utils/configs";
 import { useSettingsStore } from "@/stores/settings";
+import { useMapsStore } from "@/stores/maps";
+import { computeMapPlacement } from "@/utils/ros-map";
 import {
   headingArrowPoints,
   headingLineEnd,
@@ -12,9 +14,18 @@ import {
 
 const { totalNodes, totalEdges, totalLayouts } = useVDA5050();
 const settingsStore = useSettingsStore();
+const mapsStore = useMapsStore();
 
-// Robot heading arrows are drawn above the nodes
-const layers = { robotHeadings: "nodes" };
+// Map images are drawn on a layer below the edges and nodes
+const layers = { map: "base", robotHeadings: "nodes" };
+
+const mapImages = computed(() =>
+  mapsStore.displayedMaps.map((map) => ({
+    id: map.id,
+    image: map.image,
+    ...computeMapPlacement(map.metadata, map.pixelWidth, map.pixelHeight),
+  }))
+);
 const mode = useColorMode({
   selector: "html",
   attribute: "class",
@@ -50,6 +61,21 @@ const isDark = computed(() => mode.value === "dark");
       :zoom-level="100"
       :layers="layers"
     >
+      <template #map>
+        <image
+          v-for="map in mapImages"
+          :key="map.id"
+          :href="map.image"
+          :x="map.x"
+          :y="map.y"
+          :width="map.width"
+          :height="map.height"
+          :transform="map.transform || undefined"
+          :opacity="mapsStore.opacity"
+          preserveAspectRatio="none"
+          style="image-rendering: pixelated; pointer-events: none"
+        />
+      </template>
       <template #robotHeadings="{ scale }">
         <g
           v-for="robot in robots"
